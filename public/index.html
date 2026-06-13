@@ -274,7 +274,7 @@ function ReportForm({audit,onClose,onRefresh}){
     setSaving(true);
     const r=await API.put(`/api/audits/${audit.id}/report`,{data,status:finalize?'finalized':'draft'});
     setSaving(false);
-    if(r.inadequate_dp)setDpAlert(`⚠ INADEQUATE DP: Calculated DP ₹${(r.dp_calculated&&r.dp_calculated.toLocaleString)('en-IN')} is less than outstanding balance. Bank will be alerted.`);
+    if(r.inadequate_dp)setDpAlert(`⚠ INADEQUATE DP: Calculated DP ₹${(r.dp_calculated||0).toLocaleString('en-IN')} is less than outstanding balance. Bank will be alerted.`);
     setMsg(finalize?'Report finalized!':'Draft saved.');
     if(finalize){onRefresh();setTimeout(()=>{setMsg('');onClose();},1500);}
     else setTimeout(()=>setMsg(''),2500);
@@ -283,7 +283,7 @@ function ReportForm({audit,onClose,onRefresh}){
   const[aiMsgs,setAiMsgs]=useState({});
   const[docTypes,setDocTypes]=useState([]);
   const[showAI,setShowAI]=useState(false);
-  useEffect(()=>{if(\!readOnly)API.get('/api/ai-doc-types').then(setDocTypes);},[readOnly]);
+  useEffect(()=>{if(!readOnly)API.get('/api/ai-doc-types').then(setDocTypes);},[readOnly]);
   async function runAI(file,docKey){
     setAiLoading(docKey);setAiMsgs(p=>({...p,[docKey]:''}));
     const fd=new FormData();fd.append('file',file);fd.append('doc_type',docKey);
@@ -291,7 +291,7 @@ function ReportForm({audit,onClose,onRefresh}){
     setAiLoading(null);
     if(r.error){setAiMsgs(p=>({...p,[docKey]:'Error: '+r.error}));return;}
     if(r.result)setData(p=>({...p,...r.result}));
-    setAiMsgs(p=>({...p,[docKey]:'Done\! Review fields below.'}));
+    setAiMsgs(p=>({...p,[docKey]:'Done! Review fields below.'}));
   }
     if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading…</div>;
   const SROWS=['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'];
@@ -310,8 +310,8 @@ function ReportForm({audit,onClose,onRefresh}){
       </div>
       {msg&&<div className={`alert ${msg.includes('finalized')?'alert-g':'alert-b'}`}>{msg}</div>}
       {dpAlert&&<div className="alert alert-r">⚠ {dpAlert}</div>}
-      {\!readOnly&&<div style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)',borderRadius:12,marginBottom:20,overflow:'hidden'}}>
-        <div style={{padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>setShowAI(p=>\!p)}>
+      {!readOnly&&<div style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)',borderRadius:12,marginBottom:20,overflow:'hidden'}}>
+        <div style={{padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>setShowAI(p=>!p)}>
           <div><div style={{color:'#fff',fontWeight:800,fontSize:14}}>🤖 AI Document Analysis</div><div style={{color:'#94a3b8',fontSize:12,marginTop:2}}>Upload audit documents — Gemini AI reads each and pre-fills the report fields automatically</div></div>
           <span style={{color:'#60a5fa',fontSize:20}}>{showAI?'▲':'▼'}</span>
         </div>
@@ -325,7 +325,7 @@ function ReportForm({audit,onClose,onRefresh}){
               </div>
               <label style={{background:aiLoading===dt.key?'#374151':'#2563eb',color:'#fff',borderRadius:8,padding:'7px 14px',fontWeight:700,fontSize:12,cursor:aiLoading?'default':'pointer',whiteSpace:'nowrap',flexShrink:0}}>
                 {aiLoading===dt.key?'Reading...':'Upload & Analyze'}
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" style={{display:'none'}} disabled={\!\!aiLoading} onChange={e=>e.target.files[0]&&runAI(e.target.files[0],dt.key)}/>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" style={{display:'none'}} disabled={!!aiLoading} onChange={e=>e.target.files[0]&&runAI(e.target.files[0],dt.key)}/>
               </label>
             </div>
           </div>))}
@@ -665,7 +665,7 @@ function ForgotPassword({onBack}){
   const[msg,setMsg]=useState('');
   const[err,setErr]=useState('');
   async function sendOtp(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('OTP sent to '+email);setStep('otp');}
-  async function resetPwd(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,otp,newPassword:newPwd})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('Password reset\! Please login.');setStep('done');}
+  async function resetPwd(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,otp,newPassword:newPwd})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('Password reset! Please login.');setStep('done');}
   if(step==='done')return<div style={{textAlign:'center'}}><div style={{color:'#16a34a',marginBottom:12}}>{msg}</div><button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} onClick={onBack}>Back to Login</button></div>;
   return<div>
     <h3 style={{textAlign:'center',marginBottom:16,color:'#1e293b'}}>Reset Password</h3>
