@@ -3,6 +3,19 @@
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AuditFlow v2</title>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var root = document.getElementById('root');
+  if (root && \!root.hasChildNodes()) {
+    root.innerHTML = '<div style="padding:40px;font-family:sans-serif;color:#333"><h2>Loading AuditFlow...</h2><p id="status">Initializing React...</p></div>';
+  }
+});
+window.onerror = function(msg, src, line, col, err) {
+  var root = document.getElementById('root');
+  if (root) root.innerHTML = '<div style="padding:40px;font-family:monospace;background:#fee2e2"><h2 style="color:#dc2626">JavaScript Error</h2><p><b>Message:</b> ' + msg + '</p><p><b>Source:</b> ' + src + '</p><p><b>Line:</b> ' + line + '</p><p><b>Error:</b> ' + (err ? err.stack : 'none') + '</p></div>';
+  return false;
+};
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
