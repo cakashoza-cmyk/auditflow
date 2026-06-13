@@ -776,67 +776,142 @@
 <section class="section" id="pricing">
   <div style="text-align:center">
     <div class="section-label">Pricing</div>
-    <h2 class="section-title">Simple, Transparent Pricing</h2>
-    <p class="section-sub" style="margin:12px auto 0; max-width:560px">Start free. Scale as your audit volume grows. No setup fees, no hidden charges.</p>
+    <h2 class="section-title">Transparent, Professional Pricing</h2>
+    <p class="section-sub" style="margin:12px auto 0; max-width:620px">Structured for practices of every scale — from individual CAs to large bank panels. No hidden charges. No lock-ins. Cancel anytime.</p>
   </div>
-  <div class="pricing-grid">
+
+  <!-- FOUNDING MEMBER BANNER -->
+  <div style="
+    background: linear-gradient(135deg, #0f2057 0%, #1a56db 100%);
+    color: #fff;
+    border-radius: 20px;
+    padding: 28px 36px;
+    margin: 36px auto 0;
+    max-width: 960px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+    box-shadow: 0 8px 32px rgba(26,86,219,0.3);
+    position: relative;
+    overflow: hidden;
+  ">
+    <div style="position:absolute;right:-20px;top:-20px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,0.05);"></div>
+    <div style="display:flex; align-items:center; gap:20px; position:relative;">
+      <div style="background:rgba(255,255,255,0.15); border-radius:14px; padding:12px; flex-shrink:0; font-size:1.8rem; line-height:1;">🏅</div>
+      <div>
+        <div style="font-size:0.72rem; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:rgba(255,255,255,0.6); margin-bottom:6px;">Founding Member Programme</div>
+        <div style="font-size:1.15rem; font-weight:800; line-height:1.3;">First 100 Chartered Accountants — <span style="color:#93c5fd;">12 Months Free</span> on Any Plan</div>
+        <div style="font-size:0.88rem; color:rgba(255,255,255,0.75); margin-top:8px; max-width:520px;">We are inviting a select cohort of forward-thinking CAs to shape the AuditFlow platform as Founding Members. Enrol now and receive 12 months of full platform access at no cost — no credit card required, no strings attached.</div>
+      </div>
+    </div>
+    <div style="text-align:center; flex-shrink:0; background:rgba(255,255,255,0.12); border-radius:14px; padding:16px 24px; position:relative;">
+      <div style="font-size:0.72rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:rgba(255,255,255,0.6); margin-bottom:6px;">Founding Spots Available</div>
+      <div id="spotsLeft" style="font-size:2.8rem; font-weight:900; line-height:1; color:#fff;">100</div>
+      <div style="font-size:0.75rem; color:rgba(255,255,255,0.55); margin-top:4px;">of 100 remaining</div>
+    </div>
+  </div>
+
+  <!-- REFERRAL STRIP -->
+  <div style="
+    background: linear-gradient(135deg, #fef9c3, #fef3c7);
+    border: 1.5px solid #fbbf24;
+    border-radius: 14px;
+    padding: 18px 28px;
+    margin: 20px auto 0;
+    max-width: 960px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  ">
+    <span style="font-size:1.6rem; flex-shrink:0;">🤝</span>
+    <div style="flex:1; min-width:240px;">
+      <div style="font-size:0.95rem; font-weight:800; color:#92400e;">Refer a CA. Earn 2 Additional Months Free.</div>
+      <div style="font-size:0.85rem; color:#78350f; margin-top:4px;">For every fellow CA you refer who joins AuditFlow, your free access is extended by <strong>2 months</strong> — with full Professional plan features. There is no cap on referrals. The more peers you bring on board, the longer your complimentary access.</div>
+    </div>
+    <button onclick="getReferralLink()" style="background:#d97706; color:#fff; border-radius:8px; padding:10px 22px; font-weight:700; font-size:0.88rem; white-space:nowrap; flex-shrink:0; border:none; cursor:pointer;">Get Referral Link →</button>
+  </div>
+
+  <div class="pricing-grid" style="margin-top:36px;">
 
     <div class="pricing-card fade-in">
-      <div class="pricing-name">Starter</div>
-      <div class="pricing-price">Free</div>
-      <div class="pricing-desc">For CAs getting started on the platform</div>
+      <div class="pricing-name">Essential</div>
+      <div style="margin-bottom:4px;">
+        <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
+          <div class="pricing-price">₹999 <span>/ month</span></div>
+        </div>
+        <div style="background:#dcfce7; color:#065f46; font-size:0.75rem; font-weight:700; padding:3px 12px; border-radius:20px; display:inline-block; margin-top:8px;">✦ 12 Months FREE — Founding Members</div>
+      </div>
+      <div class="pricing-desc" style="margin-top:10px;">Ideal for individual CAs managing a moderate audit portfolio seeking to go fully digital.</div>
       <ul class="pricing-features">
-        <li>Up to 5 audits/month</li>
-        <li>RBI-format report generation</li>
-        <li>AI document analysis (10 uploads)</li>
-        <li>CA public profile</li>
-        <li class="no">Invoice management</li>
-        <li class="no">Priority mandate assignment</li>
+        <li>Up to 10 audits per month</li>
+        <li>RBI-format audit report generation</li>
+        <li>AI document analysis (20 uploads/month)</li>
+        <li>CA public profile with ratings &amp; track record</li>
+        <li>Automated email notifications</li>
+        <li class="no">Invoice &amp; fee management</li>
+        <li class="no">Priority mandate listing</li>
       </ul>
-      <a href="/index.html" class="btn-plan btn-plan-outline">Get Started Free</a>
+      <a href="/index.html" class="btn-plan btn-plan-outline">Register as Founding Member →</a>
     </div>
 
     <div class="pricing-card featured fade-in">
-      <div class="pricing-badge">Most Popular</div>
+      <div class="pricing-badge">Recommended for CAs</div>
       <div class="pricing-name">Professional</div>
-      <div class="pricing-price">₹2,999 <span>/ month</span></div>
-      <div class="pricing-desc">For CAs and banks running regular audits</div>
+      <div style="margin-bottom:4px;">
+        <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
+          <div class="pricing-price">₹2,999 <span>/ month</span></div>
+        </div>
+        <div style="background:#dbeafe; color:#1e429f; font-size:0.75rem; font-weight:700; padding:3px 12px; border-radius:20px; display:inline-block; margin-top:8px;">✦ 12 Months FREE — Founding Members</div>
+      </div>
+      <div class="pricing-desc" style="margin-top:10px;">Designed for CAs and firms managing a high volume of bank audits with multi-user access needs.</div>
       <ul class="pricing-features">
-        <li>Unlimited audits</li>
-        <li>RBI-format report generation</li>
+        <li>Unlimited audits per month</li>
+        <li>RBI-format audit report generation</li>
         <li>Unlimited AI document analysis</li>
-        <li>Invoice &amp; fee management</li>
-        <li>Priority mandate listing</li>
-        <li>Analytics dashboard</li>
+        <li>Invoice generation &amp; fee management</li>
+        <li>Priority listing for new bank mandates</li>
+        <li>Analytics dashboard — performance insights</li>
+        <li>Multi-user access (up to 3 team members)</li>
       </ul>
-      <a href="/index.html" class="btn-plan btn-plan-filled">Start 14-Day Trial</a>
+      <a href="/index.html" class="btn-plan btn-plan-filled">Register as Founding Member →</a>
     </div>
 
     <div class="pricing-card fade-in">
       <div class="pricing-name">Enterprise</div>
       <div class="pricing-price">Custom</div>
-      <div class="pricing-desc">For banks managing large CA panels</div>
+      <div class="pricing-desc" style="margin-top:10px;">For banks, NBFCs, and large CA firms requiring institution-grade features, integrations, and support.</div>
       <ul class="pricing-features">
-        <li>Unlimited branches &amp; users</li>
-        <li>White-labelled report header</li>
-        <li>API integration with core banking</li>
-        <li>Dedicated account manager</li>
-        <li>Custom compliance reports</li>
-        <li>SLA-backed uptime guarantee</li>
+        <li>Unlimited branches &amp; user accounts</li>
+        <li>White-labelled report headers &amp; branding</li>
+        <li>API integration with core banking systems</li>
+        <li>Dedicated relationship &amp; account manager</li>
+        <li>Custom compliance and MIS reports</li>
+        <li>SLA-backed uptime &amp; priority support</li>
+        <li>Structured onboarding &amp; staff training</li>
       </ul>
-      <a href="mailto:hello@auditflow.in" class="btn-plan btn-plan-outline">Contact Sales</a>
+      <button onclick="openInquiry('Enterprise Plan')" class="btn-plan btn-plan-outline">Request a Consultation</button>
     </div>
 
+  </div>
+
+  <div style="text-align:center; margin-top:28px;">
+    <p style="font-size:0.85rem; color:var(--gray-600); max-width:640px; margin:0 auto; line-height:1.8;">
+      ✦ The Founding Member offer is valid for the first 100 CA registrations only. Post that, standard pricing applies from month 13 onwards — with full transparency and no surprise charges.<br/>
+      ✦ Referral extension applies to Professional plan features regardless of your enrolled plan.
+    </p>
   </div>
 </section>
 
 <!-- FINAL CTA -->
 <section class="cta-final">
-  <h2>Ready to Modernise Your Stock Audits?</h2>
-  <p>Join banks and CAs already using AuditFlow to cut turnaround time, eliminate errors, and stay RBI-compliant — automatically.</p>
+  <h2>The Future of Stock Audits Starts Here</h2>
+  <p>Join the growing community of CAs and banks moving beyond spreadsheets and WhatsApp. Secure your Founding Member spot today — before the 100 seats are filled.</p>
   <div class="cta-final-buttons">
-    <a href="/index.html" class="btn-white">Start Free Today →</a>
-    <a href="mailto:hello@auditflow.in" class="btn-ghost">Talk to Our Team</a>
+    <a href="/index.html" class="btn-white">Register as Founding Member →</a>
+    <button onclick="openInquiry('General')" class="btn-ghost" style="border:none;cursor:pointer;">Request a Consultation</button>
   </div>
 </section>
 
@@ -852,11 +927,252 @@
   RBI-compliant stock audit workflows for banks, CAs &amp; borrowers.</p>
   <div style="font-size:0.85rem; display:flex; gap:20px;">
     <a href="/index.html" style="color:rgba(255,255,255,0.6)">Login</a>
-    <a href="mailto:hello@auditflow.in" style="color:rgba(255,255,255,0.6)">Contact</a>
+    <a href="#" onclick="openInquiry('General'); return false;" style="color:rgba(255,255,255,0.6)">Contact</a>
   </div>
 </footer>
 
+<!-- INQUIRY MODAL -->
+<div id="inquiryModal" style="
+  display:none; position:fixed; inset:0; z-index:1000;
+  background:rgba(0,0,0,0.55); backdrop-filter:blur(4px);
+  align-items:center; justify-content:center; padding:20px;
+">
+  <div style="
+    background:#fff; border-radius:20px; padding:36px;
+    width:100%; max-width:480px; position:relative;
+    box-shadow:0 24px 60px rgba(0,0,0,0.25);
+    animation: slideUp 0.25s ease;
+  ">
+    <button onclick="closeInquiry()" style="
+      position:absolute; top:16px; right:16px;
+      background:var(--gray-100); border:none; border-radius:50%;
+      width:32px; height:32px; font-size:1.1rem; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; color:var(--gray-600);
+    ">✕</button>
+
+    <div style="margin-bottom:24px;">
+      <div style="font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--blue); margin-bottom:6px;">Get in Touch</div>
+      <h3 style="font-size:1.4rem; font-weight:800; color:var(--gray-900);">Talk to Our Team</h3>
+      <p style="font-size:0.88rem; color:var(--gray-600); margin-top:6px;">We'll get back to you within 24 hours. Fields marked <span style="color:#ef4444;">*</span> are required.</p>
+    </div>
+
+    <div id="inquirySuccess" style="display:none; text-align:center; padding:20px 0;">
+      <div style="font-size:3rem;">✅</div>
+      <h4 style="font-size:1.1rem; font-weight:700; margin:12px 0 8px; color:var(--gray-900);">Inquiry Submitted!</h4>
+      <p style="font-size:0.88rem; color:var(--gray-600);">Thank you! Our team will reach out to you shortly.</p>
+      <button onclick="closeInquiry()" style="margin-top:20px; background:var(--blue); color:#fff; border:none; border-radius:8px; padding:10px 28px; font-weight:700; cursor:pointer; font-size:0.9rem;">Close</button>
+    </div>
+
+    <form id="inquiryForm" onsubmit="submitInquiry(event)">
+      <input type="hidden" id="inquiryPlan" value=""/>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.85rem; font-weight:600; color:var(--gray-700); display:block; margin-bottom:6px;">Full Name</label>
+        <input type="text" id="inqName" placeholder="e.g. Rajesh Kumar"
+          style="width:100%; padding:10px 14px; border:1.5px solid var(--gray-200); border-radius:8px; font-size:0.9rem; outline:none; transition:border 0.15s;"
+          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'"/>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.85rem; font-weight:600; color:var(--gray-700); display:block; margin-bottom:6px;">Mobile Number <span style="color:#ef4444;">*</span></label>
+        <div style="display:flex; gap:8px;">
+          <div style="background:var(--gray-100); border:1.5px solid var(--gray-200); border-radius:8px; padding:10px 12px; font-size:0.9rem; color:var(--gray-700); white-space:nowrap;">🇮🇳 +91</div>
+          <input type="tel" id="inqPhone" placeholder="98765 43210" maxlength="10" required
+            style="flex:1; padding:10px 14px; border:1.5px solid var(--gray-200); border-radius:8px; font-size:0.9rem; outline:none; transition:border 0.15s;"
+            onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'"
+            oninput="this.value=this.value.replace(/\D/g,'')"/>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.85rem; font-weight:600; color:var(--gray-700); display:block; margin-bottom:6px;">Email Address <span style="color:#ef4444;">*</span></label>
+        <input type="email" id="inqEmail" placeholder="you@example.com" required
+          style="width:100%; padding:10px 14px; border:1.5px solid var(--gray-200); border-radius:8px; font-size:0.9rem; outline:none; transition:border 0.15s;"
+          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'"/>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.85rem; font-weight:600; color:var(--gray-700); display:block; margin-bottom:6px;">I am a…</label>
+        <select id="inqRole"
+          style="width:100%; padding:10px 14px; border:1.5px solid var(--gray-200); border-radius:8px; font-size:0.9rem; outline:none; background:#fff; cursor:pointer;"
+          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'">
+          <option value="">Select your role</option>
+          <option value="CA">Chartered Accountant (CA)</option>
+          <option value="Bank">Bank / NBFC Official</option>
+          <option value="Borrower">Borrower / Business Owner</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <label style="font-size:0.85rem; font-weight:600; color:var(--gray-700); display:block; margin-bottom:6px;">Message <span style="font-size:0.78rem; font-weight:400; color:var(--gray-600);">(optional)</span></label>
+        <textarea id="inqMessage" rows="3" placeholder="Tell us about your requirements…"
+          style="width:100%; padding:10px 14px; border:1.5px solid var(--gray-200); border-radius:8px; font-size:0.9rem; outline:none; resize:vertical; font-family:inherit; transition:border 0.15s;"
+          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'"></textarea>
+      </div>
+
+      <div id="inqError" style="display:none; background:#fef2f2; color:#dc2626; border-radius:8px; padding:10px 14px; font-size:0.85rem; margin-bottom:16px;"></div>
+
+      <button type="submit" style="
+        width:100%; background:var(--blue); color:#fff; border:none;
+        border-radius:8px; padding:13px; font-size:1rem; font-weight:700;
+        cursor:pointer; transition:background 0.15s;
+      " onmouseover="this.style.background='var(--blue-dark)'" onmouseout="this.style.background='var(--blue)'">
+        Send Inquiry →
+      </button>
+      <p style="text-align:center; font-size:0.78rem; color:var(--gray-600); margin-top:10px;">🔒 Your details are safe with us. No spam, ever.</p>
+    </form>
+  </div>
+</div>
+
+<style>
+@keyframes slideUp {
+  from { opacity:0; transform:translateY(24px); }
+  to { opacity:1; transform:translateY(0); }
+}
+</style>
+
 <script>
+// ── REFERRAL LINK ──────────────────────────────────────────────────────────────
+async function getReferralLink() {
+  const token = localStorage.getItem('af_token');
+  if (!token) {
+    // Not logged in — send them to the app to login first
+    window.location.href = '/index.html?action=referral';
+    return;
+  }
+  try {
+    const res = await fetch('/api/my/referral-link', { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    showReferralModal(data);
+  } catch(e) {
+    // Token expired or invalid — redirect to login
+    window.location.href = '/index.html?action=referral';
+  }
+}
+
+function showReferralModal(data) {
+  const link = data.referral_link;
+  const existing = document.getElementById('referralModal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'referralModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:36px;width:100%;max-width:460px;position:relative;box-shadow:0 24px 60px rgba(0,0,0,0.25);animation:slideUp 0.25s ease;">
+      <button onclick="document.getElementById('referralModal').remove();document.body.style.overflow='';"
+        style="position:absolute;top:16px;right:16px;background:#f3f4f6;border:none;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer;">✕</button>
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1a56db;margin-bottom:6px;">Your Referral Link</div>
+      <h3 style="font-size:1.3rem;font-weight:800;color:#111827;margin-bottom:8px;">Share &amp; Earn Free Months</h3>
+      <p style="font-size:0.88rem;color:#4b5563;margin-bottom:20px;">Every CA who registers via your link adds <strong>2 months</strong> of free Professional access to your account. No cap on referrals.</p>
+
+      <div style="background:#f3f4f6;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <div style="font-size:0.82rem;color:#1f2937;word-break:break-all;flex:1;" id="refLinkText">${link}</div>
+        <button onclick="copyRef('${link}')" id="copyRefBtn"
+          style="background:#1a56db;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-weight:700;font-size:0.8rem;cursor:pointer;white-space:nowrap;">Copy</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+        <div style="background:#eff6ff;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:1.5rem;font-weight:800;color:#1a56db;">${data.referral_count || 0}</div>
+          <div style="font-size:0.78rem;color:#4b5563;margin-top:2px;">CAs Referred</div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:1.5rem;font-weight:800;color:#057a55;">${data.free_months || 12}</div>
+          <div style="font-size:0.78rem;color:#4b5563;margin-top:2px;">Free Months Earned</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;">
+        <a href="https://wa.me/?text=I%20use%20AuditFlow%20for%20all%20my%20bank%20stock%20audits%20%E2%80%94%20it%20generates%20RBI-compliant%20reports%20in%20one%20click.%20First%20100%20CAs%20get%2012%20months%20free.%20Register%20here%3A%20${encodeURIComponent(link)}"
+          target="_blank"
+          style="flex:1;background:#25d366;color:#fff;border-radius:8px;padding:10px;text-align:center;font-weight:700;font-size:0.88rem;text-decoration:none;">
+          Share on WhatsApp
+        </a>
+        <button onclick="sendRefEmail('${link}')"
+          style="flex:1;background:#f3f4f6;color:#1f2937;border:none;border-radius:8px;padding:10px;font-weight:700;font-size:0.88rem;cursor:pointer;">
+          Send via Email
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  modal.addEventListener('click', function(e) { if(e.target===modal){ modal.remove(); document.body.style.overflow=''; } });
+}
+
+function copyRef(link) {
+  navigator.clipboard.writeText(link).then(function() {
+    const btn = document.getElementById('copyRefBtn');
+    if (btn) { btn.textContent = 'Copied!'; btn.style.background = '#057a55'; setTimeout(function(){ btn.textContent='Copy'; btn.style.background='#1a56db'; }, 2000); }
+  });
+}
+
+function sendRefEmail(link) {
+  const subject = encodeURIComponent('Join AuditFlow — 12 Months Free for CAs');
+  const body = encodeURIComponent('Hi,\n\nI have been using AuditFlow for my bank stock audits and it has made a big difference — RBI-compliant reports in one click, automated Drawing Power calculations, and no more WhatsApp chaos.\n\nFirst 100 CAs get 12 months of full access completely free. Register here:\n\n' + link + '\n\nRegards');
+  window.open('mailto:?subject=' + subject + '&body=' + body);
+}
+
+// Pass ?ref= from URL into register form automatically (handled in index.html)
+// This just preserves it if landing page links to index.html
+document.querySelectorAll('a[href="/index.html"]').forEach(function(a) {
+  const ref = new URLSearchParams(window.location.search).get('ref');
+  if (ref) a.href = '/index.html?ref=' + ref;
+});
+
+// ── INQUIRY MODAL ──────────────────────────────────────────────────────────────
+function openInquiry(plan) {
+  document.getElementById('inquiryPlan').value = plan || '';
+  document.getElementById('inquiryModal').style.display = 'flex';
+  document.getElementById('inquirySuccess').style.display = 'none';
+  document.getElementById('inquiryForm').style.display = 'block';
+  document.getElementById('inqError').style.display = 'none';
+  document.body.style.overflow = 'hidden';
+}
+function closeInquiry() {
+  document.getElementById('inquiryModal').style.display = 'none';
+  document.body.style.overflow = '';
+  // reset form
+  document.getElementById('inquiryForm').reset();
+}
+document.getElementById('inquiryModal').addEventListener('click', function(e) {
+  if (e.target === this) closeInquiry();
+});
+
+function submitInquiry(e) {
+  e.preventDefault();
+  const phone = document.getElementById('inqPhone').value.trim();
+  const email = document.getElementById('inqEmail').value.trim();
+  const errEl = document.getElementById('inqError');
+
+  if (phone.length < 10) {
+    errEl.textContent = 'Please enter a valid 10-digit mobile number.';
+    errEl.style.display = 'block'; return;
+  }
+  if (!email.includes('@') || !email.includes('.')) {
+    errEl.textContent = 'Please enter a valid email address.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+
+  // Collect data (in production, POST to /api/inquiry)
+  const payload = {
+    name: document.getElementById('inqName').value.trim(),
+    phone: '+91' + phone,
+    email,
+    role: document.getElementById('inqRole').value,
+    message: document.getElementById('inqMessage').value.trim(),
+    plan: document.getElementById('inquiryPlan').value,
+    submitted_at: new Date().toISOString()
+  };
+  console.log('Inquiry:', payload);
+
+  // Show success state
+  document.getElementById('inquiryForm').style.display = 'none';
+  document.getElementById('inquirySuccess').style.display = 'block';
+}
+
 // Audience tab switcher
 function switchTab(tab) {
   document.querySelectorAll('.audience-tab').forEach(t => t.classList.remove('active'));

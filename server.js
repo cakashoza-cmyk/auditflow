@@ -203,7 +203,7 @@ function linkPendingAudits(userId, email, role) {
 // ── AUTH ROUTES ──────────────────────────────────────────────────────────
 app.post('/api/auth/register', async function(req, res) {
   const { name, email, password, role, phone, city, address, icai_no, firm_name,
-          firm_reg_no, bank_name, branch, gstin, pan, constitution } = req.body;
+          firm_reg_no, bank_name, branch, gstin, pan, constitution, referred_by } = req.body;
   if (!name || !email || !password || !role)
     return res.status(400).json({ error: 'Name, email, password and role required' });
   if (dbFindOne('users', { email }))
@@ -214,7 +214,25 @@ app.post('/api/auth/register', async function(req, res) {
     icai_no:icai_no||null, firm_name:firm_name||null, firm_reg_no:firm_reg_no||null,
     bank_name:bank_name||null, branch:branch||null,
     gstin:gstin||null, pan:pan||null, constitution:constitution||null,
-    is_temp_password: false });
+    is_temp_password: false,
+    referred_by: referred_by || null,
+    free_months: 12 // all new registrations get 12 months free (Founding Member offer)
+  });
+  // Credit referrer with 2 extra free months
+  if (referred_by) {
+    var db = loadDB();
+    var refIdx = db.users.findIndex(function(u) { return u.id === referred_by; });
+    if (refIdx !== -1) {
+      db.users[refIdx].free_months = (db.users[refIdx].free_months || 12) + 2;
+      db.users[refIdx].referral_count = (db.users[refIdx].referral_count || 0) + 1;
+      saveDB(db);
+      var referrer = db.users[refIdx];
+      sendEmail({ to: referrer.email, toName: referrer.name,
+        subject: '[AuditFlow] Your referral worked! +2 months added',
+        body: 'Hi ' + referrer.name + ',\n\n' + name + ' just joined AuditFlow using your referral link. We\'ve added 2 more months of free Professional access to your account.\n\nYour total free months: ' + db.users[refIdx].free_months + '\n\nKeep sharing your referral link to earn more!\n\nRegards,\nTeam AuditFlow',
+        type: 'referral' });
+    }
+  }
   const linked = linkPendingAudits(user.id, email, role);
   const token = jwt.sign({ id:user.id, name:user.name, email:user.email, role:user.role }, JWT_SECRET, { expiresIn:'7d' });
   res.json({ token, user:safeUser(user), linked_audits:linked });
@@ -828,15 +846,28 @@ app.get('/api/analytics', auth(['ca','admin']), function(req, res) {
 });
 
 // ── REFERRAL ──────────────────────────────────────────────────────────────────
+app.get('/api/my/referral-link', auth(), function(req, res) {
+  var appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  var link = appUrl + '/?ref=' + req.user.id;
+  var user = dbFindOne('users', { id: req.user.id });
+  res.json({
+    referral_link: link,
+    referral_count: user.referral_count || 0,
+    free_months: user.free_months || 12
+  });
+});
+
 app.post('/api/refer', auth(), function(req, res) {
   const { email, name } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
   const referrer = dbFindOne('users', { id: req.user.id });
+  var appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  var referralLink = appUrl + '/?ref=' + referrer.id;
   sendEmail({ to: email, toName: name || email,
-    subject: referrer.name + ' invited you to AuditFlow',
-    body: 'Hi ' + (name || '') + ',\n\n' + referrer.name + ' thinks you\'d find AuditFlow useful — it\'s a platform that digitises stock audits for CAs and banks, replacing WhatsApp and spreadsheets with a proper workflow.\n\nSign up free:\n' + (process.env.APP_URL || 'http://localhost:3000') + '\n\nRegards,\nTeam AuditFlow',
+    subject: referrer.name + ' invited you to AuditFlow — 12 Months Free',
+    body: 'Hi ' + (name || '') + ',\n\n' + referrer.name + ' has invited you to join AuditFlow — India\'s digital stock audit platform for CAs and banks.\n\nAs a Founding Member, you get 12 months of full access completely free. No credit card required.\n\nRegister using this exclusive link:\n' + referralLink + '\n\nWith AuditFlow you can:\n• Generate RBI-compliant audit reports in one click\n• Auto-calculate Drawing Power with AI assistance\n• Manage mandates, invoices and client documents — all in one place\n\nThis is a limited offer for the first 100 CAs only. Secure your spot today.\n\nRegards,\nTeam AuditFlow',
     type: 'referral' });
-  res.json({ ok: true });
+  res.json({ ok: true, referral_link: referralLink });
 });
 
 // ── CA PUBLIC PROFILE ─────────────────────────────────────────────────────────

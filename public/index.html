@@ -901,9 +901,11 @@ function ForgotPassword({onBack}){
   </div>;
 }
 function AuthScreen({onLogin}){
-  const[mode,setMode]=useState('login');
+  const urlRef=new URLSearchParams(window.location.search).get('ref');
+  const urlAction=new URLSearchParams(window.location.search).get('action');
+  const[mode,setMode]=useState(urlRef||urlAction==='referral'?'register':'login');
   const[role,setRole]=useState('ca');
-  const[form,setForm]=useState({name:'',email:'',password:'',phone:'',city:'',address:'',icai_no:'',firm_name:'',firm_reg_no:'',bank_name:'',branch:'',gstin:'',pan:'',constitution:'Proprietorship'});
+  const[form,setForm]=useState({name:'',email:'',password:'',phone:'',city:'',address:'',icai_no:'',firm_name:'',firm_reg_no:'',bank_name:'',branch:'',gstin:'',pan:'',constitution:'Proprietorship',referred_by:urlRef||''});
   const[err,setErr]=useState('');
   const[loading,setLoading]=useState(false);
   function set(k,v){setForm(p=>({...p,[k]:v}));}
@@ -911,6 +913,7 @@ function AuthScreen({onLogin}){
   return(<div className="auth-wrap"><div className="auth-card">
     <div className="auth-logo">⚡ AuditFlow</div>
     <div style={{fontSize:13,color:'var(--gray)',marginBottom:20}}>Stock Audit Platform — CAs · Banks · Borrowers</div>
+    {mode==='register'&&urlRef&&<div style={{background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:13,color:'#1e429f'}}>🎁 You were referred! Register below to activate your <strong>12 months free</strong> Founding Member access.</div>}
     <div className="role-tabs">{[['ca','CA'],['banker','Banker'],['borrower','Borrower']].map(([r,l])=><div key={r} className={`role-tab ${role===r?'active':''}`} onClick={()=>{setRole(r);setErr('');}}>{l}</div>)}</div>
     {err&&<div className="alert alert-r" style={{marginBottom:12}}>{err}</div>}
     <form onSubmit={submit}>
