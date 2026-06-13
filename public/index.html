@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AuditFlow v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1a202c;font-size:14px}
+:root{--blue:#2563eb;--blue-l:#eff6ff;--blue-m:#dbeafe;--green:#16a34a;--green-l:#f0fdf4;--green-m:#dcfce7;--amber:#d97706;--amber-l:#fffbeb;--amber-m:#fef3c7;--red:#dc2626;--red-l:#fef2f2;--red-m:#fee2e2;--purple:#7c3aed;--purple-l:#f5f3ff;--gray:#6b7280;--gray-l:#f9fafb;--gray-m:#e5e7eb;--sidebar:#1e293b;--r:10px;--sh:0 1px 3px rgba(0,0,0,.08)}
+.app{display:flex;min-height:100vh}
+.sidebar{width:230px;background:var(--sidebar);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
+.main{margin-left:230px;flex:1}
+.topbar{background:#fff;border-bottom:1px solid var(--gray-m);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.page{padding:20px 24px;max-width:1120px}
+.logo{padding:16px 18px;border-bottom:1px solid #334155}
+.logo-t{font-size:17px;font-weight:800;color:#fff}
+.logo-s{font-size:10.5px;color:#94a3b8;margin-top:2px}
+.nav{padding:10px 0;flex:1}
+.ni{display:flex;align-items:center;gap:9px;padding:9px 18px;color:#94a3b8;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.ni:hover{background:#334155;color:#fff}.ni.active{background:#334155;color:#fff;border-left-color:var(--blue)}
+.ni-icon{font-size:15px;width:18px;text-align:center}
+.ns{padding:7px 18px 3px;font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.8px}
+.sf{padding:14px 18px;border-top:1px solid #334155}
+.av{width:32px;height:32px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;flex-shrink:0}
+.card{background:#fff;border-radius:var(--r);box-shadow:var(--sh);padding:20px}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.sg3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.sc{background:#fff;border-radius:var(--r);box-shadow:var(--sh);padding:14px 18px;border-left:4px solid;cursor:pointer;transition:box-shadow .15s}
+.sc:hover{box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.sc.active-card{box-shadow:0 4px 12px rgba(37,99,235,.25);border-width:4px}
+.sv{font-size:26px;font-weight:800;line-height:1;margin-bottom:3px}
+.sl{font-size:11.5px;color:var(--gray);font-weight:500}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-blue{background:var(--blue-m);color:var(--blue)}.b-green{background:var(--green-m);color:var(--green)}.b-amber{background:var(--amber-m);color:var(--amber)}.b-red{background:var(--red-m);color:var(--red)}.b-gray{background:var(--gray-m);color:#374151}.b-purple{background:var(--purple-l);color:var(--purple)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn-p{background:var(--blue);color:#fff}.btn-p:hover{background:#1d4ed8}
+.btn-o{background:#fff;color:#374151;border:1.5px solid var(--gray-m)}.btn-o:hover{background:var(--gray-l)}
+.btn-g{background:var(--green);color:#fff}.btn-g:hover{background:#15803d}
+.btn-r{background:var(--red);color:#fff}.btn-r:hover{background:#b91c1c}
+.btn-ghost{background:transparent;color:var(--blue);padding:4px 8px;font-size:12.5px;border:none;cursor:pointer}.btn-ghost:hover{background:var(--blue-l)}
+.btn-sm{padding:5px 11px;font-size:12px}.btn-xs{padding:3px 8px;font-size:11px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:9px 13px;font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;border-bottom:1.5px solid var(--gray-m);background:var(--gray-l)}
+td{padding:12px 13px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fafc;cursor:pointer}
+.pb{height:5px;background:var(--gray-m);border-radius:3px;overflow:hidden}
+.pf{height:100%;border-radius:3px;transition:width .3s}
+.dp{position:fixed;right:0;top:0;bottom:0;width:500px;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);z-index:200;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+.dp.open{transform:translateX(0)}
+.dph{padding:18px 22px;border-bottom:1px solid var(--gray-m);display:flex;justify-content:space-between;align-items:center}
+.dpb{flex:1;overflow-y:auto;padding:18px 22px}
+.ptabs{display:flex;border-bottom:2px solid var(--gray-m);margin-bottom:18px;overflow-x:auto}
+.ptab{padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;color:var(--gray);border-bottom:2.5px solid transparent;margin-bottom:-2px;transition:all .15s;white-space:nowrap}
+.ptab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:190;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.open{opacity:1;pointer-events:all}
+.stepper{display:flex;align-items:flex-start;padding:8px 0}
+.step{display:flex;flex-direction:column;align-items:center;flex:1;position:relative}
+.sdot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;z-index:1;border:2.5px solid transparent}
+.sdot.done{background:var(--green);color:#fff;border-color:var(--green)}
+.sdot.active{background:var(--blue);color:#fff;border-color:var(--blue);box-shadow:0 0 0 4px var(--blue-m)}
+.sdot.pend{background:#fff;color:#9ca3af;border-color:var(--gray-m)}
+.slbl{font-size:9.5px;color:var(--gray);margin-top:5px;text-align:center;max-width:62px;line-height:1.3;font-weight:500}
+.slbl.active{color:var(--blue);font-weight:700}.slbl.done{color:var(--green);font-weight:600}
+.sline{position:absolute;top:13px;left:50%;right:-50%;height:2px;background:var(--gray-m);z-index:0}
+.sline.done{background:var(--green)}
+.step:last-child .sline{display:none}
+.doc-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin-bottom:6px;border:1px solid var(--gray-m);background:#fff}
+.dchk{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.dchk.uploaded,.dchk.aa_fetched{background:var(--green);color:#fff}
+.dchk.aa_pending,.dchk.pending{background:var(--gray-m);color:var(--gray)}
+.dchk.missing{background:var(--red-m);color:var(--red)}
+.ir{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f8fafc;font-size:13px}
+.ir:last-child{border-bottom:none}.il{color:var(--gray)}.iv{font-weight:600}
+label{display:block;font-size:12.5px;font-weight:600;color:#374151;margin-bottom:4px}
+input,select,textarea{width:100%;padding:8px 11px;border:1.5px solid var(--gray-m);border-radius:7px;font-size:13px;outline:none;font-family:inherit;background:#fff}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-m)}
+textarea{min-height:70px;resize:vertical}
+.fg{margin-bottom:14px}.fg2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px}
+.tl-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.tl-dot{width:9px;height:9px;border-radius:50%;background:var(--blue);margin-top:4px;flex-shrink:0}
+.tl-dot.g{background:var(--green)}.tl-dot.gr{background:var(--gray-m)}.tl-dot.r{background:var(--red)}
+.section-t{font-size:16px;font-weight:700;margin-bottom:4px}.section-s{font-size:13px;color:var(--gray);margin-bottom:16px}
+.mb-4{margin-bottom:16px}.mb-6{margin-bottom:22px}
+.flex{display:flex}.ic{align-items:center}.jb{justify-content:space-between}.gap-2{gap:8px}
+.alert{padding:11px 15px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.alert-r{background:var(--red-l);border:1px solid var(--red-m);color:var(--red)}
+.alert-g{background:var(--green-l);border:1px solid var(--green-m);color:var(--green)}
+.alert-b{background:var(--blue-l);border:1px solid var(--blue-m);color:var(--blue)}
+.alert-a{background:var(--amber-l);border:1px solid var(--amber-m);color:var(--amber)}
+.inadp-banner{background:var(--red-l);border:2px solid var(--red-m);border-radius:9px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-chip{padding:5px 12px;border-radius:20px;font-size:12.5px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-m);background:#fff;color:var(--gray);transition:all .15s}
+.filter-chip.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b 0%,#2563eb 100%)}
+.auth-card{background:#fff;border-radius:16px;padding:36px 40px;width:460px;box-shadow:0 20px 60px rgba(0,0,0,.2);max-height:95vh;overflow-y:auto}
+.auth-logo{font-size:24px;font-weight:800;margin-bottom:6px}
+.role-tabs{display:flex;gap:8px;margin-bottom:20px;background:var(--gray-l);padding:4px;border-radius:9px}
+.role-tab{flex:1;padding:7px;text-align:center;border-radius:6px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--gray);transition:all .15s}
+.role-tab.active{background:#fff;color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.rpt-section{border:1px solid var(--gray-m);border-radius:9px;overflow:hidden;margin-bottom:18px}
+.rpt-sh{background:var(--gray-l);padding:11px 16px;font-weight:700;font-size:13px;color:#374151;border-bottom:1px solid var(--gray-m)}
+.rpt-body{padding:16px}
+table.rpt-tbl th{background:var(--blue-l);color:var(--blue);font-size:11px}
+table.rpt-tbl td{padding:8px 10px}
+table.rpt-tbl input{padding:5px 7px;font-size:12.5px}
+.consent-box{border:2px solid var(--blue-m);border-radius:12px;padding:22px;text-align:center;background:var(--blue-l)}
+.rating-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.r-btn{padding:10px;border-radius:8px;border:2px solid var(--gray-m);cursor:pointer;text-align:center;transition:all .15s;background:#fff}
+.r-btn:hover{border-color:var(--blue)}.r-btn.selected{border-color:var(--blue);background:var(--blue-m)}
+.remind-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:300;background:rgba(0,0,0,.4)}
+.remind-box{background:#fff;border-radius:14px;padding:28px;width:440px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, createContext, useContext } = React;
+
+const API = {
+  token: ()=>localStorage.getItem('af_token'),
+  h: ()=>({'Content-Type':'application/json',Authorization:`Bearer ${API.token()}`}),
+  get: url=>fetch(url,{headers:API.h()}).then(r=>r.json()),
+  post: (url,b)=>fetch(url,{method:'POST',headers:API.h(),body:JSON.stringify(b)}).then(r=>r.json()),
+  put: (url,b)=>fetch(url,{method:'PUT',headers:API.h(),body:JSON.stringify(b)}).then(r=>r.json()),
+  upload: (url,fd)=>fetch(url,{method:'POST',headers:{Authorization:`Bearer ${API.token()}`},body:fd}).then(r=>r.json()),
+};
+
+const AuthCtx = createContext(null);
+const useAuth = ()=>useContext(AuthCtx);
+
+const STAGES=[{key:'initiated',label:'Initiated'},{key:'docs_requested',label:'Docs Requested'},{key:'customer_submitted',label:'Cust. Submitted'},{key:'visit_scheduled',label:'Visit Scheduled'},{key:'visit_done',label:'Visit Done'},{key:'draft_ready',label:'Draft Ready'},{key:'finalized',label:'Finalized'}];
+const SI=Object.fromEntries(STAGES.map((s,i)=>[s.key,i]));
+
+function stageBadge(s){const m={initiated:['b-gray','🔔'],docs_requested:['b-blue','📋'],customer_submitted:['b-blue','📤'],visit_scheduled:['b-purple','📅'],visit_done:['b-amber','✅'],draft_ready:['b-amber','📝'],finalized:['b-green','🏁']};const[cls,icon]=m[s]||['b-gray','?'];return <span className={`badge ${cls}`}>{icon} {STAGES.find(x=>x.key===s)?.label||s}</span>;}
+function payBadge(s){if(s==='paid')return<span className="badge b-green">💰 Paid</span>;if(s==='pending')return<span className="badge b-amber">⏳ Pending</span>;return<span className="badge b-gray">Not Raised</span>;}
+function initials(n=''){return n.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();}
+function stageProgress(s){return Math.round(((SI[s]||0)+1)/STAGES.length*100);}
+function pColor(p){return p===100?'var(--green)':p>=60?'var(--blue)':p>=30?'var(--amber)':'var(--gray)';}
+function fmtDate(d){if(!d)return'—';try{return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});}catch{return d;}}
+function daysLeft(dl){if(!dl)return null;return Math.ceil((new Date(dl)-new Date())/(864e5));}
+
+function Stepper({stage}){
+  const cur=SI[stage]||0;
+  return(<div className="stepper">{STAGES.map((s,i)=>{const st=i<cur?'done':i===cur?'active':'pend';return(<div key={s.key} className="step">{i<STAGES.length-1&&<div className={`sline ${i<cur?'done':''}`}/>}<div className={`sdot ${st}`}>{st==='done'?'✓':i+1}</div><div className={`slbl ${st}`}>{s.label}</div></div>);})}</div>);
+}
+
+function DocList({docs,auditId,onRefresh,canUpload}){
+  const[uploading,setUploading]=useState(null);
+  const si={uploaded:'✓',aa_fetched:'⚡',pending:'…',aa_pending:'⏳',missing:'!'};
+  const sl={uploaded:'Uploaded',aa_fetched:'AA Auto-Fetched',pending:'Pending',aa_pending:'Awaiting AA Consent',missing:'Missing'};
+  async function doUpload(docId,file){setUploading(docId);const fd=new FormData();fd.append('file',file);fd.append('doc_id',docId);await API.upload(`/api/audits/${auditId}/documents/upload`,fd);setUploading(null);onRefresh();}
+  return(<div>{docs.map(d=>(<div key={d.id} className="doc-item"><div className={`dchk ${d.status}`}>{si[d.status]||'?'}</div><div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{d.name}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:1}}>{sl[d.status]||d.status} · {d.source}</div></div>{d.file_path&&<a href={d.file_path} target="_blank" className="btn btn-o btn-xs">View</a>}{canUpload&&(d.status==='pending'||d.status==='missing')&&<label className="btn btn-o btn-xs" style={{marginBottom:0,cursor:'pointer'}}>{uploading===d.id?'…':'Upload'}<input type="file" style={{display:'none'}} onChange={e=>e.target.files[0]&&doUpload(d.id,e.target.files[0])}/></label>}</div>))}</div>);
+}
+
+function ConsentSection({audit,onRefresh}){
+  const{user}=useAuth();
+  const[sending,setSending]=useState(false);
+  const[approving,setApproving]=useState(false);
+  const consent=audit.consent;
+  async function request(){setSending(true);await API.post(`/api/audits/${audit.id}/consent`,{data_types:['gst','itr','bank_statement']});setSending(false);onRefresh();}
+  async function approve(){setApproving(true);await API.put(`/api/aa-consents/${consent.id}/approve`,{});setApproving(false);onRefresh();}
+  if(!consent)return(<div className="consent-box"><div style={{fontSize:32,marginBottom:8}}>🔗</div><div style={{fontWeight:700,fontSize:15,marginBottom:8}}>Account Aggregator Consent</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:16,lineHeight:1.6}}>Send a consent request to fetch GST returns, ITR and bank statements automatically via RBI's Account Aggregator framework.</div><button className="btn btn-p" onClick={request} disabled={sending}>{sending?'Sending…':'📤 Send Consent Request to Borrower'}</button></div>);
+  if(consent.status==='pending')return(<div><div className="alert alert-a">⏳ Consent request sent. Awaiting borrower approval.</div>{(user.role==='borrower'||user.role==='admin')&&<div className="consent-box" style={{marginTop:12}}><div style={{fontSize:28,marginBottom:8}}>📱</div><div style={{fontWeight:700,fontSize:14,marginBottom:8}}>Approve Data Sharing</div><div style={{display:'flex',justifyContent:'center',gap:8,marginBottom:14,flexWrap:'wrap'}}>{['✅ GST Returns','✅ ITR (2 years)','✅ Bank Statements'].map(t=><span key={t} className="badge b-blue">{t}</span>)}</div><div style={{fontSize:12,color:'var(--gray)',marginBottom:14}}>Purpose: Stock audit · {audit.bank_name} · Read-only · 30 days</div><button className="btn btn-g" style={{width:'100%',justifyContent:'center'}} onClick={approve} disabled={approving}>{approving?'Processing…':'✅ Approve & Share via AA'}</button></div>}</div>);
+  return(<div className="alert alert-g">✅ <strong>Consent approved.</strong> GST returns, ITR and bank statements auto-fetched. Expires: {fmtDate(consent.expires_at)}</div>);
+}
+
+function RemindModal({audit,onClose}){
+  const[target,setTarget]=useState('both');
+  const[msg,setMsg]=useState('');
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState('');
+  async function send(){setSending(true);const r=await API.post(`/api/audits/${audit.id}/remind`,{target,message:msg});setSending(false);setSent(`Reminder sent to: ${r.sent?.join(', ')||target}`);setTimeout(()=>onClose(),2000);}
+  return(<div className="remind-modal" onClick={onClose}><div className="remind-box" onClick={e=>e.stopPropagation()}><div style={{fontWeight:800,fontSize:16,marginBottom:4}}>Send Reminder</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>{audit.borrower_name} · {audit.id}</div>{sent?<div className="alert alert-g">{sent}</div>:<><div className="fg"><label>Send To</label><select value={target} onChange={e=>setTarget(e.target.value)}><option value="both">CA + Borrower</option><option value="ca">CA Only</option><option value="borrower">Borrower Only</option></select></div><div className="fg"><label>Custom Message (optional)</label><textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Leave blank for auto-message based on current stage…"/></div><div style={{display:'flex',gap:8}}><button className="btn btn-p" onClick={send} disabled={sending}>{sending?'Sending…':'📤 Send Reminder'}</button><button className="btn btn-o" onClick={onClose}>Cancel</button></div></>}</div></div>);
+}
+
+function ReportForm({audit,onClose,onRefresh}){
+  const[data,setData]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState('');
+  const[dpAlert,setDpAlert]=useState(null);
+  const{user}=useAuth();
+  const readOnly=user.role!=='ca'&&user.role!=='admin';
+  useEffect(()=>{API.get(`/api/audits/${audit.id}/report`).then(r=>{setData(r.data||{});setLoading(false);});},[audit.id]);
+  function set(k,v){setData(p=>({...p,[k]:v}));}
+  function setStock(row,col,val){const s=[...(data.stocks||Array(6).fill({}))];s[row]={...s[row],[col]:val};setData(p=>({...p,stocks:s}));}
+  function setDebt(i,col,val){const d=[...(data.debtors||Array(5).fill({}))];d[i]={...d[i],[col]:val};setData(p=>({...p,debtors:d}));}
+  async function save(finalize=false){
+    setSaving(true);
+    const r=await API.put(`/api/audits/${audit.id}/report`,{data,status:finalize?'finalized':'draft'});
+    setSaving(false);
+    if(r.inadequate_dp)setDpAlert(`⚠ INADEQUATE DP: Calculated DP ₹${r.dp_calculated?.toLocaleString('en-IN')} is less than outstanding balance. Bank will be alerted.`);
+    setMsg(finalize?'Report finalized!':'Draft saved.');
+    if(finalize){onRefresh();setTimeout(()=>{setMsg('');onClose();},1500);}
+    else setTimeout(()=>setMsg(''),2500);
+  }
+  if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading…</div>;
+  const SROWS=['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'];
+  const DROWS=['< 30 days','30–60 days','60–90 days','90–180 days','> 180 days'];
+  const stocks=data.stocks||SROWS.map(()=>({}));
+  const debtors=data.debtors||DROWS.map(()=>({}));
+  const ratings=[{r:'1',label:'Excellent',desc:'Negligible risk'},{r:'2',label:'Good',desc:'Low risk'},{r:'3',label:'Satisfactory',desc:'Manageable'},{r:'4',label:'Below Avg',desc:'Significant gaps'},{r:'5',label:'Poor',desc:'Deficiencies'},{r:'6',label:'Unsatisfactory',desc:'Critical'}];
+  return(
+    <div style={{maxWidth:900,margin:'0 auto'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+        <div><div className="section-t">RBI Stock Audit Report</div><div style={{fontSize:12.5,color:'var(--gray)'}}>{audit.id} · {audit.borrower_name}</div></div>
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-o" onClick={onClose}>← Back</button>
+          {!readOnly&&<><button className="btn btn-o" onClick={()=>save(false)} disabled={saving}>{saving?'Saving…':'💾 Save Draft'}</button><button className="btn btn-g" onClick={()=>save(true)} disabled={saving}>🏁 Finalize & Submit</button></>}
+        </div>
+      </div>
+      {msg&&<div className={`alert ${msg.includes('finalized')?'alert-g':'alert-b'}`}>{msg}</div>}
+      {dpAlert&&<div className="alert alert-r">⚠ {dpAlert}</div>}
+      <div className="rpt-section"><div className="rpt-sh">Section 1 — Borrower & Facility Details</div><div className="rpt-body">
+        <div className="fg2"><div className="fg"><label>Borrower Name</label><input value={data.borrower_name||audit.borrower_name||''} onChange={e=>set('borrower_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Constitution</label><select value={data.constitution||audit.constitution||''} onChange={e=>set('constitution',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div></div>
+        <div className="fg"><label>Address</label><input value={data.address||''} onChange={e=>set('address',e.target.value)} disabled={readOnly}/></div>
+        <div className="fg2"><div className="fg"><label>City / Cluster</label><input value={data.city||audit.city||''} onChange={e=>set('city',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>GSTIN</label><input value={data.gstin||''} onChange={e=>set('gstin',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg3"><div className="fg"><label>Bank</label><input value={data.bank_name||audit.bank_name||''} onChange={e=>set('bank_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Branch</label><input value={data.branch||audit.branch||''} onChange={e=>set('branch',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Account No.</label><input value={data.account_no||''} onChange={e=>set('account_no',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg3"><div className="fg"><label>Facility Type</label><select value={data.facility_type||''} onChange={e=>set('facility_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Cash Credit','Overdraft','WCDL','PCFC','Packing Credit'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Sanctioned Limit (₹)</label><input value={data.sanctioned_limit||''} onChange={e=>set('sanctioned_limit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Outstanding Balance (₹)</label><input value={data.outstanding||''} onChange={e=>set('outstanding',e.target.value)} disabled={readOnly} placeholder="Used for DP check"/></div></div>
+        <div className="fg3"><div className="fg"><label>DP as per Bank (₹)</label><input value={data.dp_bank||''} onChange={e=>set('dp_bank',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>DP as per Audit (₹)</label><input value={data.dp_audit||''} onChange={e=>set('dp_audit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Audit Period</label><input value={data.audit_period||''} onChange={e=>set('audit_period',e.target.value)} disabled={readOnly} placeholder="e.g. April 2024"/></div></div>
+        <div className="fg2"><div className="fg"><label>Date of Last Stock Statement</label><input type="date" value={data.last_stock_date||''} onChange={e=>set('last_stock_date',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Date of Site Visit</label><input type="date" value={data.visit_date||''} onChange={e=>set('visit_date',e.target.value)} disabled={readOnly}/></div></div>
+      </div></div>
+      <div className="rpt-section"><div className="rpt-sh">Section 2 — Stock / Inventory Position</div><div className="rpt-body">
+        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th style={{width:'22%'}}>Category</th><th>Books (₹)</th><th>Physical (₹)</th><th>Difference (₹)</th><th>Remarks</th></tr></thead><tbody>{SROWS.map((row,i)=>(<tr key={row} style={i===5?{fontWeight:700,background:'var(--gray-l)'}:{}}><td style={{fontWeight:600,fontSize:12.5}}>{row}</td><td><input value={stocks[i]?.books||''} onChange={e=>setStock(i,'books',e.target.value)} disabled={readOnly}/></td><td><input value={stocks[i]?.physical||''} onChange={e=>setStock(i,'physical',e.target.value)} disabled={readOnly}/></td><td><input value={stocks[i]?.diff||''} onChange={e=>setStock(i,'diff',e.target.value)} disabled={readOnly}/></td><td><input value={stocks[i]?.remarks||''} onChange={e=>setStock(i,'remarks',e.target.value)} disabled={readOnly}/></td></tr>))}</tbody></table></div>
+        <div className="fg3" style={{marginTop:14}}><div className="fg"><label>% Good Stock</label><input value={data.stock_good_pct||''} onChange={e=>set('stock_good_pct',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>% Slow Moving</label><input value={data.stock_slow_pct||''} onChange={e=>set('stock_slow_pct',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>% Non-Moving / Dead</label><input value={data.stock_dead_pct||''} onChange={e=>set('stock_dead_pct',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg"><label>Storage & Quality Observations</label><textarea value={data.stock_observations||''} onChange={e=>set('stock_observations',e.target.value)} disabled={readOnly}/></div>
+      </div></div>
+      <div className="rpt-section"><div className="rpt-sh">Section 3 — Book Debts / Debtors Analysis</div><div className="rpt-body">
+        <div className="fg2"><div className="fg"><label>Total Debtors (₹)</label><input value={data.total_debtors||''} onChange={e=>set('total_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Debtors for DP (₹)</label><input value={data.dp_debtors||''} onChange={e=>set('dp_debtors',e.target.value)} disabled={readOnly} placeholder="Used for DP calculation"/></div></div>
+        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging</th><th>Amount (₹)</th><th>% of Total</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>(<tr key={row}><td style={{fontWeight:600,fontSize:12.5}}>{row}</td><td><input value={debtors[i]?.amount||''} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td><td><input value={debtors[i]?.pct||''} onChange={e=>setDebt(i,'pct',e.target.value)} disabled={readOnly}/></td><td><input value={debtors[i]?.remarks||''} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td></tr>))}</tbody></table></div>
+        <div className="fg2" style={{marginTop:12}}><div className="fg"><label>Disputed / Sticky Debtors (₹)</label><input value={data.disputed_debtors||''} onChange={e=>set('disputed_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Related Party Debtors (₹)</label><input value={data.related_debtors||''} onChange={e=>set('related_debtors',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg"><label>Observations</label><textarea value={data.debtor_observations||''} onChange={e=>set('debtor_observations',e.target.value)} disabled={readOnly}/></div>
+      </div></div>
+      <div className="rpt-section"><div className="rpt-sh">Section 4 — Creditors</div><div className="rpt-body">
+        <div className="fg2"><div className="fg"><label>Total Creditors (₹)</label><input value={data.total_creditors||''} onChange={e=>set('total_creditors',e.target.value)} disabled={readOnly} placeholder="Used for DP calculation"/></div><div className="fg"><label>Creditors &gt; 90 days (₹)</label><input value={data.old_creditors||''} onChange={e=>set('old_creditors',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg"><label>Observations</label><textarea value={data.creditor_observations||''} onChange={e=>set('creditor_observations',e.target.value)} disabled={readOnly}/></div>
+      </div></div>
+      <div className="rpt-section"><div className="rpt-sh">Section 5 — Insurance</div><div className="rpt-body">
+        <div className="fg3"><div className="fg"><label>Insurer</label><input value={data.insurer||''} onChange={e=>set('insurer',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Policy No.</label><input value={data.policy_no||''} onChange={e=>set('policy_no',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Expiry Date</label><input type="date" value={data.policy_expiry||''} onChange={e=>set('policy_expiry',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg3"><div className="fg"><label>Sum Insured (₹)</label><input value={data.sum_insured||''} onChange={e=>set('sum_insured',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Coverage</label><select value={data.coverage_type||''} onChange={e=>set('coverage_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Fire','Burglary','Flood','All Risk','Marine'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Bank Shown as Mortgagee?</label><select value={data.bank_mortgagee||''} onChange={e=>set('bank_mortgagee',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Yes</option><option>No</option></select></div></div>
+        <div className="fg"><label>Adequacy Remarks</label><textarea value={data.insurance_observations||''} onChange={e=>set('insurance_observations',e.target.value)} disabled={readOnly}/></div>
+      </div></div>
+      <div className="rpt-section"><div className="rpt-sh">Section 6 — Observations</div><div className="rpt-body">
+        <div className="fg"><label>Record Keeping & Accounting</label><textarea value={data.records_obs||''} onChange={e=>set('records_obs',e.target.value)} disabled={readOnly}/></div>
+        <div className="fg"><label>Operations & Business Activity</label><textarea value={data.ops_obs||''} onChange={e=>set('ops_obs',e.target.value)} disabled={readOnly}/></div>
+        <div className="fg"><label>Key Discrepancies Noted</label><textarea value={data.discrepancies||''} onChange={e=>set('discrepancies',e.target.value)} disabled={readOnly}/></div>
+        <div className="fg"><label>Sanction Compliance</label><select value={data.sanction_compliance||''} onChange={e=>set('sanction_compliance',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Fully Compliant</option><option>Minor Deviations</option><option>Significant Deviations</option><option>Non-Compliant</option></select></div>
+      </div></div>
+      <div className="rpt-section"><div className="rpt-sh">Section 7 — Rating & Certificate</div><div className="rpt-body">
+        <label style={{marginBottom:10}}>Overall Rating (1 = Best, 6 = Unsatisfactory)</label>
+        <div className="rating-grid" style={{marginBottom:16}}>{ratings.map(r=>(<div key={r.r} className={`r-btn ${data.rating===r.r?'selected':''}`} onClick={()=>!readOnly&&set('rating',r.r)}><div style={{fontSize:20,fontWeight:800,color:data.rating===r.r?'var(--blue)':'var(--gray)'}}>{r.r}</div><div style={{fontSize:11,fontWeight:700,marginTop:2}}>{r.label}</div><div style={{fontSize:10,color:'var(--gray)',marginTop:1}}>{r.desc}</div></div>))}</div>
+        <div className="fg"><label>Recommendations to Bank</label><textarea value={data.recommendations||''} onChange={e=>set('recommendations',e.target.value)} disabled={readOnly}/></div>
+        <div className="fg2"><div className="fg"><label>CA Name</label><input value={data.ca_name||''} onChange={e=>set('ca_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>ICAI Membership No.</label><input value={data.icai_no||''} onChange={e=>set('icai_no',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg2"><div className="fg"><label>Firm Name</label><input value={data.firm_name||''} onChange={e=>set('firm_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Firm Registration No. (FRN)</label><input value={data.firm_reg_no||''} onChange={e=>set('firm_reg_no',e.target.value)} disabled={readOnly} placeholder="e.g. 123456W"/></div></div>
+        <div className="fg2"><div className="fg"><label>Date of Report</label><input type="date" value={data.report_date||''} onChange={e=>set('report_date',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg"><label>Auditor's Certificate</label><textarea value={data.certificate||''} onChange={e=>set('certificate',e.target.value)} disabled={readOnly} rows={3} placeholder="I certify that I have physically verified the stocks and books of the above borrower…"/></div>
+      </div></div>
+      {!readOnly&&<div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}><button className="btn btn-o" onClick={()=>save(false)} disabled={saving}>💾 Save Draft</button><button className="btn btn-g" onClick={()=>save(true)} disabled={saving}>🏁 Finalize & Submit</button></div>}
+    </div>
+  );
+}
+
+function InvoiceSection({audit,onRefresh}){
+  const{user}=useAuth();
+  const[raising,setRaising]=useState(false);
+  const inv=audit.invoice;
+  async function raise(){setRaising(true);await API.post(`/api/audits/${audit.id}/invoice`,{});setRaising(false);onRefresh();}
+  async function markPaid(){await API.put(`/api/invoices/${inv.id}/pay`,{});onRefresh();}
+  if(!inv){if(user.role!=='ca')return<div style={{padding:20,textAlign:'center',color:'var(--gray)'}}>Invoice not raised yet.</div>;return(<div style={{textAlign:'center',padding:28}}><div style={{fontSize:32,marginBottom:8}}>🧾</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:14}}>No invoice raised yet.</div>{audit.fee>0?<button className="btn btn-p" onClick={raise} disabled={raising}>{raising?'Raising…':'+ Raise Invoice to Bank'}</button>:<div className="alert alert-a">Fee not set by bank yet.</div>}</div>);}
+  return(<div><div style={{border:'1.5px solid var(--gray-m)',borderRadius:9,padding:18,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}><div><div style={{fontSize:12,color:'var(--gray)',fontWeight:600}}>{inv.id}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>Raised: {fmtDate(inv.raised_at)}</div></div>{payBadge(inv.status)}</div>{[['Borrower',audit.borrower_name],['Bank',audit.bank_name],['Base Fee',`₹${inv.amount?.toLocaleString('en-IN')}`],['GST 18%',`₹${inv.gst?.toLocaleString('en-IN')}`]].map(([l,v])=><div key={l} className="ir"><span className="il">{l}</span><span className="iv">{v}</span></div>)}<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderTop:'2px solid var(--gray-m)',marginTop:8}}><span style={{fontWeight:700}}>Total</span><span style={{fontSize:20,fontWeight:800}}>₹{inv.total?.toLocaleString('en-IN')}</span></div></div>{inv.status==='paid'?<div className="alert alert-g">✅ Paid ₹{inv.total?.toLocaleString('en-IN')} on {fmtDate(inv.paid_at)}</div>:inv.status==='sent'&&user.role==='banker'?<div style={{display:'flex',gap:8}}><button className="btn btn-g" onClick={markPaid}>Mark as Paid</button><button className="btn btn-o">Send Reminder</button></div>:<div className="alert alert-a">⏳ Invoice sent. Awaiting payment.</div>}</div>);
+}
+
+function AuditPanel({auditId,onClose,onRefresh:pr}){
+  const{user}=useAuth();
+  const[audit,setAudit]=useState(null);
+  const[tab,setTab]=useState('workflow');
+  const[advancing,setAdvancing]=useState(false);
+  const[showReport,setShowReport]=useState(false);
+  const[showRemind,setShowRemind]=useState(false);
+  const load=useCallback(()=>{API.get(`/api/audits/${auditId}`).then(setAudit);},[auditId]);
+  useEffect(()=>{load();},[load]);
+  function refresh(){load();if(pr)pr();}
+  async function advance(){const cur=SI[audit.stage]||0;const next=STAGES[cur+1];if(!next)return;setAdvancing(true);await API.put(`/api/audits/${auditId}/stage`,{stage:next.key});setAdvancing(false);load();}
+  if(!audit)return(<><div className="overlay open" onClick={onClose}/><div className="dp open"><div className="dpb" style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--gray)'}}>Loading…</div></div></>);
+  const dl=daysLeft(audit.deadline);
+  const pct=stageProgress(audit.stage);
+  const canAdvance=audit.stage!=='finalized'&&(user.role==='ca'||user.role==='banker'||user.role==='admin');
+  const canUpload=user.role==='borrower'||user.role==='ca';
+  if(showReport)return(<div style={{position:'fixed',inset:0,background:'#f0f4f8',zIndex:300,overflow:'auto',padding:24}}><ReportForm audit={audit} onClose={()=>setShowReport(false)} onRefresh={refresh}/></div>);
+  const tabs=[{key:'workflow',label:'📋 Workflow'},{key:'docs',label:`📁 Docs (${audit.documents?.length||0})`},{key:'consent',label:'🔗 AA Consent'},{key:'invoice',label:'🧾 Invoice'}];
+  return(<><div className="overlay open" onClick={onClose}/><div className="dp open">{showRemind&&<RemindModal audit={audit} onClose={()=>setShowRemind(false)}/>}
+    <div className="dph"><div><div style={{fontWeight:800,fontSize:15}}>{audit.borrower_name}</div><div style={{fontSize:11.5,color:'var(--gray)',marginTop:2}}>{audit.id} · {audit.bank_name}, {audit.branch}</div></div><button className="btn btn-o btn-sm" onClick={onClose}>✕</button></div>
+    <div style={{padding:'12px 22px',borderBottom:'1px solid var(--gray-m)'}}>
+      {audit.inadequate_dp&&<div className="inadp-banner"><span style={{fontSize:20}}>⚠</span><div><div style={{fontWeight:700,fontSize:13,color:'var(--red)'}}>INADEQUATE DP</div><div style={{fontSize:12,color:'var(--red)'}}>DP ₹{audit.dp_calculated?.toLocaleString('en-IN')} &lt; Outstanding</div></div></div>}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>{stageBadge(audit.stage)}<div style={{display:'flex',alignItems:'center',gap:8}}>{dl!==null&&<span style={{fontSize:11.5,fontWeight:600,color:dl<=3?'var(--red)':dl<=7?'var(--amber)':'var(--gray)'}}>{dl<=0?'⚠ OVERDUE':`${dl}d left`}</span>}<span style={{fontSize:11.5,color:'var(--gray)'}}>{pct}%</span></div></div>
+      <div className="pb"><div className="pf" style={{width:`${pct}%`,background:pColor(pct)}}/></div>
+    </div>
+    <div className="dpb">
+      <div className="ptabs">{tabs.map(t=><div key={t.key} className={`ptab ${tab===t.key?'active':''}`} onClick={()=>setTab(t.key)}>{t.label}</div>)}</div>
+      {tab==='workflow'&&<div>
+        <Stepper stage={audit.stage}/>
+        <div style={{display:'flex',gap:8,margin:'14px 0',flexWrap:'wrap'}}>
+          {canAdvance&&audit.stage!=='finalized'&&<button className="btn btn-p" onClick={advance} disabled={advancing} style={{flex:1,justifyContent:'center'}}>{advancing?'…':`→ ${STAGES[(SI[audit.stage]||0)+1]?.label}`}</button>}
+          {(user.role==='ca'||user.role==='admin')&&<button className="btn btn-o" onClick={()=>setShowReport(true)} style={{flex:1,justifyContent:'center'}}>📝 {audit.report?.status==='finalized'?'View Report':'Fill RBI Report'}</button>}
+          {user.role==='banker'&&<><button className="btn btn-o btn-sm" onClick={()=>setShowRemind(true)}>📤 Remind</button>{audit.report&&<button className="btn btn-o btn-sm" onClick={()=>setShowReport(true)}>📄 Report</button>}</>}
+        </div>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Activity Timeline</div>
+        {(audit.timeline||[]).map((t,i)=>{const isWarn=t.note.includes('⚠');const isGreen=t.note.includes('approved')||t.note.includes('completed')||t.note.includes('finalized')||t.note.includes('uploaded');return(<div key={i} className="tl-item"><div className={`tl-dot ${isWarn?'r':isGreen?'g':''}` }/><div><div style={{fontSize:13,color:isWarn?'var(--red)':'inherit'}}>{t.note}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:1}}>{t.actor} · {fmtDate(t.created_at)}</div></div></div>);})}
+      </div>}
+      {tab==='docs'&&<DocList docs={audit.documents||[]} auditId={audit.id} onRefresh={load} canUpload={canUpload}/>}
+      {tab==='consent'&&<ConsentSection audit={audit} onRefresh={load}/>}
+      {tab==='invoice'&&<InvoiceSection audit={audit} onRefresh={load}/>}
+    </div>
+  </div></>);
+}
+
+// ── AUDIT TABLE (shared) ──────────────────────────────────────────────────────
+function AuditTable({audits,setPanel,showCA=false,showBanker=false}){
+  return(<div className="card" style={{padding:0,overflow:'hidden'}}>
+    <div style={{overflowX:'auto'}}><table>
+      <thead><tr><th>ID / Urgency</th><th>Borrower</th>{showCA&&<th>CA</th>}{showBanker&&<th>Bank</th>}<th>Deadline</th><th>Docs</th><th>Stage</th><th>Fee</th></tr></thead>
+      <tbody>{audits.map(a=>{
+        const dc=(a.documents||[]).filter(d=>d.status==='uploaded'||d.status==='aa_fetched').length;
+        const dt=(a.documents||[]).length;const p=dt?Math.round(dc/dt*100):0;
+        const dl2=daysLeft(a.deadline);
+        return(<tr key={a.id} onClick={()=>setPanel(a.id)}>
+          <td><div style={{fontWeight:700,color:'var(--blue)',fontSize:12,display:'flex',alignItems:'center',gap:5}}>{a.id}{a.inadequate_dp&&<span className="badge b-red btn-xs">⚠DP</span>}</div>{dl2!==null&&<div style={{fontSize:11,color:dl2<=0?'var(--red)':dl2<=3?'var(--red)':dl2<=7?'var(--amber)':'var(--gray)',marginTop:2}}>{dl2<=0?'⚠ Overdue':`${dl2}d left`}</div>}</td>
+          <td><div style={{fontWeight:600}}>{a.borrower_name}</div><div style={{fontSize:11.5,color:'var(--gray)'}}>{a.constitution}·{a.city}</div></td>
+          {showCA&&<td style={{fontSize:13}}>{a.ca?.name||<span style={{color:'var(--gray)'}}>Not assigned</span>}</td>}
+          {showBanker&&<td style={{fontSize:13}}>{a.bank_name}</td>}
+          <td style={{fontSize:13}}>{fmtDate(a.deadline)}</td>
+          <td style={{minWidth:90}}><div style={{display:'flex',alignItems:'center',gap:6}}><div style={{flex:1}}><div className="pb"><div className="pf" style={{width:`${p}%`,background:p===100?'var(--green)':p>=60?'var(--blue)':'var(--amber)'}}/></div></div><span style={{fontSize:11,color:'var(--gray)'}}>{dc}/{dt}</span></div></td>
+          <td>{stageBadge(a.stage)}</td>
+          <td><div style={{fontWeight:700}}>₹{(a.fee||0).toLocaleString('en-IN')}</div>{payBadge(a.pay_status)}</td>
+        </tr>);
+      })}
+      {!audits.length&&<tr><td colSpan={8} style={{textAlign:'center',color:'var(--gray)',padding:24}}>No audits found.</td></tr>}
+      </tbody>
+    </table></div>
+  </div>);
+}
+
+// ── CA PORTAL ─────────────────────────────────────────────────────────────────
+function CADashboard({setPanel}){
+  const[audits,setAudits]=useState([]);
+  const[filter,setFilter]=useState('all');
+  useEffect(()=>{API.get('/api/audits').then(setAudits);},[]);
+  const active=audits.filter(a=>a.stage!=='finalized');
+  const urgent=audits.filter(a=>{const d=daysLeft(a.deadline);return d!==null&&d<=3&&a.stage!=='finalized';});
+  const actionNeeded=audits.filter(a=>['visit_done','draft_ready'].includes(a.stage));
+  const earn=audits.filter(a=>a.pay_status==='pending').reduce((s,a)=>s+Math.round((a.fee||0)*1.18),0);
+  const filters=[{key:'all',label:'All',count:audits.length},{key:'active',label:'Active',count:active.length},{key:'urgent',label:'Urgent (≤3d)',count:urgent.length},{key:'action',label:'Action Needed',count:actionNeeded.length},{key:'finalized',label:'Finalized',count:audits.filter(a=>a.stage==='finalized').length},{key:'inadp',label:'⚠ Inad. DP',count:audits.filter(a=>a.inadequate_dp).length}];
+  const filtered=audits.filter(a=>{if(filter==='active')return a.stage!=='finalized';if(filter==='urgent'){const d=daysLeft(a.deadline);return d!==null&&d<=3&&a.stage!=='finalized';}if(filter==='action')return['visit_done','draft_ready'].includes(a.stage);if(filter==='finalized')return a.stage==='finalized';if(filter==='inadp')return a.inadequate_dp;return true;});
+  return(<div className="page">
+    <div className="section-t mb-4">Good morning 👋</div>
+    <div className="sg">
+      {[{v:active.length,l:'Active Audits',c:'var(--blue)',b:'var(--blue)',f:'active'},{v:urgent.length,l:'Due in 3 Days',c:'var(--red)',b:'var(--red)',f:'urgent'},{v:actionNeeded.length,l:'Action Needed',c:'var(--amber)',b:'var(--amber)',f:'action'},{v:`₹${earn.toLocaleString('en-IN')}`,l:'Fee Receivable',c:'var(--green)',b:'var(--green)',f:'all'}].map(s=>(
+        <div key={s.l} className={`sc ${filter===s.f?'active-card':''}`} style={{borderLeftColor:s.b}} onClick={()=>setFilter(s.f)}>
+          <div className="sv" style={{color:s.c}}>{s.v}</div><div className="sl">{s.l}</div><div style={{fontSize:10.5,color:'var(--gray)',marginTop:4}}>Click to filter ↓</div>
+        </div>
+      ))}
+    </div>
+    <div className="filter-bar">{filters.map(f=><div key={f.key} className={`filter-chip ${filter===f.key?'active':''}`} onClick={()=>setFilter(f.key)}>{f.label} ({f.count})</div>)}</div>
+    <AuditTable audits={filtered} setPanel={setPanel} showBanker/>
+  </div>);
+}
+
+function CAInvoices(){
+  const[invoices,setInvoices]=useState([]);
+  const[filter,setFilter]=useState('all');
+  useEffect(()=>{API.get('/api/invoices').then(setInvoices);},[]);
+  const total=invoices.reduce((s,i)=>s+i.total,0);
+  const paid=invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+i.total,0);
+  const pending=invoices.filter(i=>i.status==='sent').reduce((s,i)=>s+i.total,0);
+  const filtered=invoices.filter(i=>filter==='all'||i.status===filter||(filter==='sent'&&i.status==='sent'));
+  return(<div className="page">
+    <div className="section-t mb-4">Invoices & Payments</div>
+    <div className="sg3">
+      {[{l:'Total Invoiced',v:`₹${total.toLocaleString('en-IN')}`,c:'var(--blue)',b:'var(--blue)',f:'all'},{l:'Received',v:`₹${paid.toLocaleString('en-IN')}`,c:'var(--green)',b:'var(--green)',f:'paid'},{l:'Pending',v:`₹${pending.toLocaleString('en-IN')}`,c:'var(--amber)',b:'var(--amber)',f:'sent'}].map(s=>(
+        <div key={s.l} className={`sc ${filter===s.f?'active-card':''}`} style={{borderLeftColor:s.b}} onClick={()=>setFilter(s.f)}>
+          <div className="sv" style={{color:s.c}}>{s.v}</div><div className="sl">{s.l}</div><div style={{fontSize:10.5,color:'var(--gray)',marginTop:4}}>Click to filter ↓</div>
+        </div>
+      ))}
+    </div>
+    <div className="card" style={{padding:0,overflow:'hidden'}}>
+      <table><thead><tr><th>Invoice #</th><th>Borrower</th><th>Bank</th><th>Fee</th><th>GST</th><th>Total</th><th>Status</th></tr></thead>
+      <tbody>{filtered.map(i=><tr key={i.id}><td style={{fontWeight:700,color:'var(--blue)',fontSize:12}}>{i.id}</td><td>{i.borrower_name}</td><td style={{fontSize:13}}>{i.bank_name}</td><td>₹{i.amount?.toLocaleString('en-IN')}</td><td>₹{i.gst?.toLocaleString('en-IN')}</td><td style={{fontWeight:700}}>₹{i.total?.toLocaleString('en-IN')}</td><td>{payBadge(i.status)}</td></tr>)}
+      {!filtered.length&&<tr><td colSpan={7} style={{textAlign:'center',color:'var(--gray)',padding:20}}>No invoices.</td></tr>}
+      </tbody></table>
+    </div>
+  </div>);
+}
+
+// ── INITIATE AUDIT FORM (used by both banker & CA) ─────────────────────────────
+function InitiateAudit({onDone}){
+  const{user}=useAuth();
+  const[cas,setCAs]=useState([]);
+  const[bankers,setBankers]=useState([]);
+  const[form,setForm]=useState({borrower_name:'',bank_name:user.bank_name||'',branch:user.branch||'',exposure:'',constitution:'Proprietorship',city:'',cluster:'',deadline:'',fee:'',ca_id:'',ca_email:'',borrower_email:'',banker_email:'',notes:''});
+  const[saving,setSaving]=useState(false);
+  const[err,setErr]=useState('');
+  const[done,setDone]=useState(null);
+  useEffect(()=>{API.get('/api/cas').then(setCAs);if(user.role==='ca')API.get('/api/bankers').then(setBankers);},[]);
+  function set(k,v){setForm(p=>({...p,[k]:v}));}
+  async function submit(e){e.preventDefault();if(!form.borrower_name||!form.bank_name||!form.branch){setErr('Borrower name, bank and branch required.');return;}setSaving(true);setErr('');const r=await API.post('/api/audits',{...form,fee:parseFloat(form.fee)||0,ca_id:form.ca_id||null});setSaving(false);if(r.error){setErr(r.error);return;}setDone(r.id);onDone(r.id);}
+  return(<div className="page"><div className="section-t mb-4">Initiate New Stock Audit</div>
+    <form onSubmit={submit} style={{maxWidth:720}}>
+      <div className="card mb-4"><div style={{fontWeight:700,fontSize:13,marginBottom:14}}>Borrower Details</div>
+        {err&&<div className="alert alert-r">{err}</div>}
+        <div className="fg2"><div className="fg"><label>Borrower Name *</label><input value={form.borrower_name} onChange={e=>set('borrower_name',e.target.value)}/></div><div className="fg"><label>Borrower Email</label><input type="email" value={form.borrower_email} onChange={e=>set('borrower_email',e.target.value)} placeholder="Borrower gets portal invite + temp password"/></div></div>
+        <div className="fg3"><div className="fg"><label>Constitution</label><select value={form.constitution} onChange={e=>set('constitution',e.target.value)}>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>City</label><input value={form.city} onChange={e=>set('city',e.target.value)}/></div><div className="fg"><label>Cluster</label><input value={form.cluster} onChange={e=>set('cluster',e.target.value)} placeholder="e.g. Textiles"/></div></div>
+      </div>
+      <div className="card mb-4"><div style={{fontWeight:700,fontSize:13,marginBottom:14}}>Credit Facility</div>
+        <div className="fg2"><div className="fg"><label>Bank Name *</label><input value={form.bank_name} onChange={e=>set('bank_name',e.target.value)}/></div><div className="fg"><label>Branch *</label><input value={form.branch} onChange={e=>set('branch',e.target.value)}/></div></div>
+        <div className="fg2"><div className="fg"><label>Exposure (₹)</label><input value={form.exposure} onChange={e=>set('exposure',e.target.value)}/></div><div className="fg"><label>Audit Fee (₹ excl. GST)</label><input type="number" value={form.fee} onChange={e=>set('fee',e.target.value)}/></div></div>
+        <div className="fg"><label>Deadline</label><input type="date" value={form.deadline} onChange={e=>set('deadline',e.target.value)}/></div>
+        {user.role==='ca'&&<div className="fg"><label>Banker Email</label><input type="email" value={form.banker_email} onChange={e=>set('banker_email',e.target.value)} placeholder="Banker gets portal invite if not registered"/></div>}
+      </div>
+      <div className="card mb-4"><div style={{fontWeight:700,fontSize:13,marginBottom:14}}>CA Assignment</div>
+        {user.role==='banker'&&<><div className="fg"><label>Select CA (registered)</label><select value={form.ca_id} onChange={e=>{set('ca_id',e.target.value);if(e.target.value)set('ca_email','');}}><option value="">— Select registered CA or invite by email —</option>{cas.map(c=><option key={c.id} value={c.id}>{c.name} (M.No.{c.icai_no||'—'}{c.firm_reg_no?` / FRN:${c.firm_reg_no}`:''}) · {c.city||'—'}</option>)}</select></div>
+        <div style={{textAlign:'center',color:'var(--gray)',fontSize:13,margin:'8px 0'}}>— OR invite new CA by email —</div>
+        <div className="fg"><label>CA Email (new invite)</label><input type="email" value={form.ca_email} onChange={e=>{set('ca_email',e.target.value);if(e.target.value)set('ca_id','');}} placeholder="New CA gets welcome email with temp password + benefits"/></div></>}
+        {user.role==='ca'&&<div className="alert alert-b">You are the assigned CA for this audit.</div>}
+        <div className="fg"><label>Notes for CA</label><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Special instructions, documents to verify…"/></div>
+      </div>
+      <div style={{background:'var(--blue-l)',border:'1px solid var(--blue-m)',borderRadius:9,padding:14,marginBottom:16,fontSize:13,color:'var(--gray)'}}>
+        📧 <strong>Welcome emails</strong> will be sent automatically to all invited parties with temp passwords and platform benefits. CA and borrower will see this audit in their dashboard on first login.
+      </div>
+      <div style={{display:'flex',gap:10}}><button type="submit" className="btn btn-p" disabled={saving}>{saving?'Initiating…':'🚀 Initiate Audit'}</button><button type="button" className="btn btn-o" onClick={()=>onDone(null)}>Cancel</button></div>
+    </form>
+  </div>);
+}
+
+// ── BANKER PORTAL ─────────────────────────────────────────────────────────────
+function BankerPortfolio({setPanel}){
+  const[audits,setAudits]=useState([]);
+  const[analytics,setAnalytics]=useState({});
+  const[filter,setFilter]=useState('all');
+  useEffect(()=>{API.get('/api/audits').then(setAudits);API.get('/api/analytics').then(setAnalytics);},[]);
+  const today=new Date().toISOString().split('T')[0];
+  const filters=[
+    {key:'all',label:'All',count:audits.length},
+    {key:'active',label:'Active',fn:a=>a.stage!=='finalized'},
+    {key:'overdue',label:'⚠ Overdue',fn:a=>a.deadline&&a.deadline<today&&a.stage!=='finalized'},
+    {key:'inadp',label:'🔴 Inad. DP',fn:a=>a.inadequate_dp},
+    {key:'finalized',label:'✅ Finalized',fn:a=>a.stage==='finalized'},
+    ...((analytics.byStage||[]).map(s=>({key:`stage_${s.stage}`,label:STAGES.find(x=>x.key===s.stage)?.label||s.stage,fn:a=>a.stage===s.stage}))),
+  ].map(f=>({...f,count:f.fn?audits.filter(f.fn).length:audits.length}));
+  const filtered=audits.filter(a=>{const f=filters.find(x=>x.key===filter);return f?.fn?f.fn(a):true;});
+  return(<div className="page">
+    <div className="section-t mb-4">Portfolio Overview</div>
+    <div className="sg">
+      {[{v:analytics.total||0,l:'Total Audits',c:'var(--blue)',b:'var(--blue)',f:'all'},{v:audits.filter(a=>a.stage!=='finalized').length,l:'Active',c:'var(--amber)',b:'var(--amber)',f:'active'},{v:analytics.overdue||0,l:'⚠ Overdue',c:'var(--red)',b:'var(--red)',f:'overdue'},{v:analytics.inadDP||0,l:'🔴 Inadequate DP',c:'var(--red)',b:'var(--red)',f:'inadp'}].map(s=>(
+        <div key={s.l} className={`sc ${filter===s.f?'active-card':''}`} style={{borderLeftColor:s.b}} onClick={()=>setFilter(s.f)}>
+          <div className="sv" style={{color:s.c}}>{s.v}</div><div className="sl">{s.l}</div><div style={{fontSize:10.5,color:'var(--gray)',marginTop:4}}>Click to filter ↓</div>
+        </div>
+      ))}
+    </div>
+    {analytics.inadDP>0&&<div className="inadp-banner"><span style={{fontSize:24}}>🔴</span><div><div style={{fontWeight:700,color:'var(--red)'}}>Inadequate DP Alert</div><div style={{fontSize:13,color:'var(--red)'}}>{analytics.inadDP} borrower(s) where DP &lt; Outstanding. <button className="btn-ghost" style={{color:'var(--red)',fontWeight:700}} onClick={()=>setFilter('inadp')}>View all →</button></div></div></div>}
+    <div className="filter-bar">{filters.map(f=><div key={f.key} className={`filter-chip ${filter===f.key?'active':''}`} onClick={()=>setFilter(f.key)}>{f.label} ({f.count})</div>)}</div>
+    <AuditTable audits={filtered} setPanel={setPanel} showCA/>
+  </div>);
+}
+
+// ── PROFILE ───────────────────────────────────────────────────────────────────
+function ProfilePage(){
+  const{user,setUser}=useAuth();
+  const[form,setForm]=useState({name:user.name||'',phone:user.phone||'',city:user.city||'',address:user.address||'',icai_no:user.icai_no||'',firm_name:user.firm_name||'',firm_reg_no:user.firm_reg_no||'',bank_name:user.bank_name||'',branch:user.branch||''});
+  const[pwForm,setPwForm]=useState({current:'',newPassword:''});
+  const[msg,setMsg]=useState('');
+  const[pwMsg,setPwMsg]=useState('');
+  function set(k,v){setForm(p=>({...p,[k]:v}));}
+  async function save(e){e.preventDefault();const r=await API.put('/api/auth/me',form);setUser(r);setMsg('Saved!');setTimeout(()=>setMsg(''),2000);}
+  async function changePw(e){e.preventDefault();const r=await API.put('/api/auth/change-password',pwForm);if(r.error){setPwMsg(r.error);}else{setPwMsg('Password changed!');setPwForm({current:'',newPassword:''});}setTimeout(()=>setPwMsg(''),3000);}
+  return(<div className="page"><div className="section-t mb-4">My Profile</div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,maxWidth:900}}>
+      <form onSubmit={save}>
+        <div className="card mb-4">
+          <div style={{display:'flex',gap:14,alignItems:'center',marginBottom:18}}>
+            <div className="av" style={{width:52,height:52,fontSize:18}}>{initials(user.name)}</div>
+            <div><div style={{fontWeight:800,fontSize:17}}>{user.name}</div><div style={{fontSize:12.5,color:'var(--gray)'}}>{user.email}</div><span className="badge b-blue" style={{marginTop:4}}>{user.role.toUpperCase()}</span></div>
+          </div>
+          {msg&&<div className="alert alert-g">{msg}</div>}
+          <div className="fg2"><div className="fg"><label>Full Name</label><input value={form.name} onChange={e=>set('name',e.target.value)}/></div><div className="fg"><label>Phone</label><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></div></div>
+          <div className="fg2"><div className="fg"><label>City</label><input value={form.city} onChange={e=>set('city',e.target.value)}/></div></div>
+          <div className="fg"><label>Full Address</label><textarea value={form.address} onChange={e=>set('address',e.target.value)} style={{minHeight:56}} placeholder="Street, Area, City, PIN"/></div>
+          {user.role==='ca'&&<><div className="fg2"><div className="fg"><label>ICAI Membership No.</label><input value={form.icai_no} onChange={e=>set('icai_no',e.target.value)} placeholder="Individual M.No. (e.g. 112847)"/></div><div className="fg"><label>Firm Reg. No. (FRN)</label><input value={form.firm_reg_no} onChange={e=>set('firm_reg_no',e.target.value)} placeholder="e.g. 123456W"/></div></div><div className="fg"><label>Firm Name</label><input value={form.firm_name} onChange={e=>set('firm_name',e.target.value)}/></div></>}
+          {user.role==='banker'&&<div className="fg2"><div className="fg"><label>Bank</label><input value={form.bank_name} onChange={e=>set('bank_name',e.target.value)}/></div><div className="fg"><label>Branch</label><input value={form.branch} onChange={e=>set('branch',e.target.value)}/></div></div>}
+          <button type="submit" className="btn btn-p">Save Changes</button>
+        </div>
+      </form>
+      <form onSubmit={changePw}>
+        <div className="card">
+          <div style={{fontWeight:700,marginBottom:14}}>Change Password</div>
+          {pwMsg&&<div className={`alert ${pwMsg.includes('changed')?'alert-g':'alert-r'}`}>{pwMsg}</div>}
+          <div className="fg"><label>Current Password</label><input type="password" value={pwForm.current} onChange={e=>setPwForm(p=>({...p,current:e.target.value}))}/></div>
+          <div className="fg"><label>New Password</label><input type="password" value={pwForm.newPassword} onChange={e=>setPwForm(p=>({...p,newPassword:e.target.value}))}/></div>
+          <button type="submit" className="btn btn-o">Update Password</button>
+        </div>
+        {user.role==='ca'&&<div className="card" style={{marginTop:16,background:'var(--blue-l)',border:'1px solid var(--blue-m)'}}>
+          <div style={{fontWeight:700,color:'var(--blue)',marginBottom:8}}>🔗 Unique CA Identifiers</div>
+          <div style={{fontSize:12.5,color:'var(--gray)',lineHeight:1.7}}>
+            <div><strong>ICAI Membership No.:</strong> {user.icai_no||'Not set'} — Individual CA identity</div>
+            <div><strong>Firm Reg. No. (FRN):</strong> {user.firm_reg_no||'Not set'} — CA Firm identity</div>
+            <div style={{marginTop:6}}>Both are issued by ICAI and serve as your unique identifiers on AuditFlow.</div>
+          </div>
+        </div>}
+      </form>
+    </div>
+  </div>);
+}
+
+// ── BORROWER PORTAL ───────────────────────────────────────────────────────────
+function BorrowerPortal({setPanel}){
+  const[audits,setAudits]=useState([]);
+  useEffect(()=>{API.get('/api/audits').then(setAudits);},[]);
+  return(<div className="page"><div className="section-t mb-4">My Audits</div>
+    {!audits.length&&<div className="card" style={{textAlign:'center',padding:32}}><div style={{fontSize:32,marginBottom:8}}>📋</div><div style={{color:'var(--gray)'}}>No audits yet. Your bank or CA will notify you when one is started.</div></div>}
+    {audits.map(a=><div key={a.id} className="card mb-4" style={{cursor:'pointer'}} onClick={()=>setPanel(a.id)}>
+      {a.inadequate_dp&&<div className="inadp-banner" style={{marginBottom:10}}><span style={{fontSize:18}}>⚠</span><span style={{color:'var(--red)',fontWeight:700,fontSize:13}}>Inadequate DP reported by auditor — bank action pending</span></div>}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}><div><div style={{fontWeight:800,fontSize:15}}>{a.borrower_name}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>{a.id} · {a.bank_name}, {a.branch}</div></div>{stageBadge(a.stage)}</div>
+      <div style={{marginBottom:10}}><div className="pb"><div className="pf" style={{width:`${stageProgress(a.stage)}%`,background:pColor(stageProgress(a.stage))}}/></div></div>
+      <div style={{display:'flex',gap:16,fontSize:12.5,color:'var(--gray)'}}><span>📅 {fmtDate(a.deadline)}</span><span>👤 {a.ca?.name||'Not assigned'}</span>{a.ca?.icai_no&&<span>M.No. {a.ca.icai_no}</span>}</div>
+    </div>)}
+  </div>);
+}
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+function AuthScreen({onLogin}){
+  const[mode,setMode]=useState('login');
+  const[role,setRole]=useState('ca');
+  const[form,setForm]=useState({name:'',email:'',password:'',phone:'',city:'',address:'',icai_no:'',firm_name:'',firm_reg_no:'',bank_name:'',branch:'',gstin:'',pan:'',constitution:'Proprietorship'});
+  const[err,setErr]=useState('');
+  const[loading,setLoading]=useState(false);
+  function set(k,v){setForm(p=>({...p,[k]:v}));}
+  async function submit(e){e.preventDefault();setErr('');setLoading(true);const url=mode==='login'?'/api/auth/login':'/api/auth/register';const body=mode==='login'?{email:form.email,password:form.password}:{...form,role};const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());setLoading(false);if(r.error){setErr(r.error);return;}localStorage.setItem('af_token',r.token);onLogin(r.user);}
+  return(<div className="auth-wrap"><div className="auth-card">
+    <div className="auth-logo">⚡ AuditFlow</div>
+    <div style={{fontSize:13,color:'var(--gray)',marginBottom:20}}>Stock Audit Platform — CAs · Banks · Borrowers</div>
+    <div className="role-tabs">{[['ca','CA'],['banker','Banker'],['borrower','Borrower']].map(([r,l])=><div key={r} className={`role-tab ${role===r?'active':''}`} onClick={()=>{setRole(r);setErr('');}}>{l}</div>)}</div>
+    {err&&<div className="alert alert-r" style={{marginBottom:12}}>{err}</div>}
+    <form onSubmit={submit}>
+      {mode==='register'&&<div className="fg"><label>Full Name</label><input value={form.name} onChange={e=>set('name',e.target.value)} required/></div>}
+      <div className="fg"><label>Email</label><input type="email" value={form.email} onChange={e=>set('email',e.target.value)} required placeholder="your@email.com"/></div>
+      <div className="fg"><label>Password</label><input type="password" value={form.password} onChange={e=>set('password',e.target.value)} required/></div>
+      {mode==='register'&&<>
+        <div className="fg2"><div className="fg"><label>Phone</label><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></div><div className="fg"><label>City</label><input value={form.city} onChange={e=>set('city',e.target.value)}/></div></div>
+        <div className="fg"><label>Full Address</label><input value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Street, Area, City, PIN"/></div>
+        {role==='ca'&&<><div className="fg2"><div className="fg"><label>ICAI Membership No.</label><input value={form.icai_no} onChange={e=>set('icai_no',e.target.value)} placeholder="Individual (e.g. 112847)"/></div><div className="fg"><label>Firm Reg. No. (FRN)</label><input value={form.firm_reg_no} onChange={e=>set('firm_reg_no',e.target.value)} placeholder="e.g. 123456W"/></div></div><div className="fg"><label>Firm Name</label><input value={form.firm_name} onChange={e=>set('firm_name',e.target.value)}/></div></>}
+        {role==='banker'&&<div className="fg2"><div className="fg"><label>Bank Name</label><input value={form.bank_name} onChange={e=>set('bank_name',e.target.value)}/></div><div className="fg"><label>Branch</label><input value={form.branch} onChange={e=>set('branch',e.target.value)}/></div></div>}
+        {role==='borrower'&&<div className="fg"><label>Constitution</label><select value={form.constitution} onChange={e=>set('constitution',e.target.value)}>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div>}
+      </>}
+      <button type="submit" className="btn btn-p" style={{width:'100%',justifyContent:'center',marginTop:8}} disabled={loading}>{loading?'Please wait…':mode==='login'?'Login →':'Create Account →'}</button>
+    </form>
+    <div style={{textAlign:'center',marginTop:14,fontSize:13,color:'var(--gray)'}}>
+      {mode==='login'?<>No account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('register');setErr('');}}>Register</span></>:<>Have account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('login');setErr('');}}>Login</span></>}
+    </div>
+    <div style={{marginTop:18,padding:'12px',background:'var(--blue-l)',borderRadius:8,fontSize:12,color:'var(--gray)'}}>
+      <strong>Demo accounts (password: demo1234)</strong><br/>banker@demo.com · ca@demo.com · borrower@demo.com
+    </div>
+  </div></div>);
+}
+
+// ── APP SHELL ─────────────────────────────────────────────────────────────────
+function App(){
+  const[user,setUser]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[page,setPage]=useState('dashboard');
+  const[panel,setPanel]=useState(null);
+  const[initiating,setInitiating]=useState(false);
+  useEffect(()=>{const t=localStorage.getItem('af_token');if(t){API.get('/api/auth/me').then(u=>{if(u?.id)setUser(u);setLoading(false);}).catch(()=>setLoading(false));}else setLoading(false);},[]);
+  function logout(){localStorage.removeItem('af_token');setUser(null);setPage('dashboard');}
+  if(loading)return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f0f4f8',color:'var(--gray)',fontSize:15}}>⚡ Loading AuditFlow…</div>;
+  if(!user)return<AuthCtx.Provider value={{user,setUser}}><AuthScreen onLogin={setUser}/></AuthCtx.Provider>;
+  const isCA=user.role==='ca',isBanker=user.role==='banker',isBorrower=user.role==='borrower';
+  const nav=isCA?[{key:'dashboard',icon:'🏠',label:'Dashboard'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'invoices',icon:'🧾',label:'Invoices'},{key:'profile',icon:'👤',label:'Profile'}]:isBanker?[{key:'dashboard',icon:'🏠',label:'Portfolio'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'profile',icon:'👤',label:'Profile'}]:[{key:'dashboard',icon:'🏠',label:'My Audits'},{key:'profile',icon:'👤',label:'Profile'}];
+  if(initiating)return<AuthCtx.Provider value={{user,setUser}}><div className="app"><div className="sidebar"><div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div><nav className="nav">{nav.map(n=><div key={n.key} className="ni" onClick={()=>{setInitiating(false);setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav><div className="sf"><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av">{initials(user.name)}</div><div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#94a3b8',fontSize:11}}>{user.role.toUpperCase()}</div></div></div></div></div><div className="main"><div className="topbar"><div style={{fontWeight:700,color:'#374151'}}>Initiate Audit</div><button className="btn btn-o btn-sm" onClick={logout}>Logout</button></div><InitiateAudit onDone={(id)=>{setInitiating(false);setPage('dashboard');if(id)setPanel(id);}}/></div></div></AuthCtx.Provider>;
+  return(<AuthCtx.Provider value={{user,setUser}}><div className="app">
+    <div className="sidebar">
+      <div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div>
+      <nav className="nav">{nav.map(n=><div key={n.key} className={`ni ${page===n.key?'active':''}`} onClick={()=>{if(n.key==='initiate')setInitiating(true);else setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav>
+      <div className="sf"><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av">{initials(user.name)}</div><div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#94a3b8',fontSize:11}}>{user.role.toUpperCase()}</div></div></div></div>
+    </div>
+    <div className="main">
+      <div className="topbar"><div style={{fontWeight:700,color:'#374151'}}>{nav.find(n=>n.key===page)?.label||'AuditFlow'}</div><div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:12,color:'var(--gray)'}}>{user.email}</span><button className="btn btn-o btn-sm" onClick={logout}>Logout</button></div></div>
+      {page==='dashboard'&&isCA&&<CADashboard setPanel={setPanel}/>}
+      {page==='dashboard'&&isBanker&&<BankerPortfolio setPanel={setPanel}/>}
+      {page==='dashboard'&&isBorrower&&<BorrowerPortal setPanel={setPanel}/>}
+      {page==='invoices'&&isCA&&<CAInvoices/>}
+      {page==='profile'&&<ProfilePage/>}
+    </div>
+    {panel&&<AuditPanel auditId={panel} onClose={()=>setPanel(null)} onRefresh={()=>{}}/>}
+  </div></AuthCtx.Provider>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

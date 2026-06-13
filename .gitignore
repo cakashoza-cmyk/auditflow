@@ -1,0 +1,5 @@
+node_modules/
+uploads/
+auditflow_data.json
+*.log
+.env
