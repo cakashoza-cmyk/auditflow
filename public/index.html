@@ -128,6 +128,7 @@ const API = {
   post: (url,b)=>fetch(url,{method:'POST',headers:API.h(),body:JSON.stringify(b)}).then(r=>r.json()),
   put: (url,b)=>fetch(url,{method:'PUT',headers:API.h(),body:JSON.stringify(b)}).then(r=>r.json()),
   upload: (url,fd)=>fetch(url,{method:'POST',headers:{Authorization:`Bearer ${API.token()}`},body:fd}).then(r=>r.json()),
+  del: url=>fetch(url,{method:'DELETE',headers:API.h()}).then(r=>r.json()),
 };
 
 const AuthCtx = createContext(null);
@@ -149,12 +150,46 @@ function Stepper({stage}){
   return(<div className="stepper">{STAGES.map((s,i)=>{const st=i<cur?'done':i===cur?'active':'pend';return(<div key={s.key} className="step">{i<STAGES.length-1&&<div className={`sline ${i<cur?'done':''}`}/>}<div className={`sdot ${st}`}>{st==='done'?'✓':i+1}</div><div className={`slbl ${st}`}>{s.label}</div></div>);})}</div>);
 }
 
-function DocList({docs,auditId,onRefresh,canUpload}){
+function DriveLink({audit,user,onRefresh}){
+  const[editing,setEditing]=useState(false);
+  const[link,setLink]=useState(audit.drive_link||'');
+  const[saving,setSaving]=useState(false);
+  const canEdit=user.role==='banker'||user.role==='ca'||user.role==='admin';
+  async function save(){setSaving(true);await API.put(`/api/audits/${audit.id}/drive-link`,{drive_link:link});setSaving(false);setEditing(false);onRefresh();}
+  if(audit.drive_link&&!editing)return(<div style={{background:'#f0fdf4',border:'1.5px solid #86efac',borderRadius:10,padding:14,marginBottom:14,display:'flex',gap:10,alignItems:'center'}}>
+    <span style={{fontSize:20}}>📁</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:'#16a34a'}}>Document Folder (Google Drive)</div>
+    <div style={{fontSize:12,color:'#6b7280',marginTop:2}}>All audit documents are shared via this folder</div></div>
+    <a href={audit.drive_link} target="_blank" className="btn btn-g btn-sm">Open Folder</a>
+    {canEdit&&<button className="btn btn-o btn-xs" onClick={()=>setEditing(true)}>Edit</button>}
+  </div>);
+  if(canEdit)return(<div style={{background:'#fffbeb',border:'1.5px dashed #fcd34d',borderRadius:10,padding:14,marginBottom:14}}>
+    <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>📁 Link Google Drive Folder</div>
+    <div style={{fontSize:12,color:'#6b7280',marginBottom:8}}>Create a shared Drive folder for this audit, paste the link below. Borrower and CA will use this folder to exchange documents — no file uploads needed here.</div>
+    {editing||!audit.drive_link?<div style={{display:'flex',gap:8}}><input value={link} onChange={e=>setLink(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." style={{flex:1,padding:'8px 10px',borderRadius:7,border:'1.5px solid #d1d5db',fontSize:13}}/><button className="btn btn-g btn-sm" onClick={save} disabled={saving||!link}>{saving?'…':'Save'}</button>{editing&&<button className="btn btn-o btn-xs" onClick={()=>setEditing(false)}>Cancel</button>}</div>:null}
+  </div>);
+  return null;
+}
+
+function DocList({docs,auditId,auditStage,onRefresh,canUpload,user}){
   const[uploading,setUploading]=useState(null);
+  const[deleting,setDeleting]=useState(null);
   const si={uploaded:'✓',aa_fetched:'⚡',pending:'…',aa_pending:'⏳',missing:'!'};
   const sl={uploaded:'Uploaded',aa_fetched:'AA Auto-Fetched',pending:'Pending',aa_pending:'Awaiting AA Consent',missing:'Missing'};
   async function doUpload(docId,file){setUploading(docId);const fd=new FormData();fd.append('file',file);fd.append('doc_id',docId);await API.upload(`/api/audits/${auditId}/documents/upload`,fd);setUploading(null);onRefresh();}
-  return(<div>{docs.map(d=>(<div key={d.id} className="doc-item"><div className={`dchk ${d.status}`}>{si[d.status]||'?'}</div><div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{d.name}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:1}}>{sl[d.status]||d.status} · {d.source}</div></div>{d.file_path&&<a href={d.file_path} target="_blank" className="btn btn-o btn-xs">View</a>}{canUpload&&(d.status==='pending'||d.status==='missing')&&<label className="btn btn-o btn-xs" style={{marginBottom:0,cursor:'pointer'}}>{uploading===d.id?'…':'Upload'}<input type="file" style={{display:'none'}} onChange={e=>e.target.files[0]&&doUpload(d.id,e.target.files[0])}/></label>}</div>))}</div>);
+  async function doDelete(doc){
+    if(!window.confirm(`Delete "${doc.name}"? The file will be removed and the document reset to pending.`))return;
+    setDeleting(doc.id);
+    const r=await API.del(`/api/audits/${auditId}/documents/${doc.id}`);
+    setDeleting(null);
+    if(r.error)alert(r.error);else onRefresh();
+  }
+  const canDelete=(d)=>{
+    if(auditStage==='finalized')return false;
+    if(d.status==='pending'&&d.source!=='Manual')return false;
+    if(user?.role==='banker'||user?.role==='admin')return true;
+    return d.uploaded_by&&d.uploaded_by===user?.id;
+  };
+  return(<div>{docs.map(d=>(<div key={d.id} className="doc-item"><div className={`dchk ${d.status}`}>{si[d.status]||'?'}</div><div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{d.name}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:1}}>{sl[d.status]||d.status} · {d.source}</div></div>{d.file_path&&<a href={d.file_path} target="_blank" className="btn btn-o btn-xs">View</a>}{canUpload&&(d.status==='pending'||d.status==='missing')&&<label className="btn btn-o btn-xs" style={{marginBottom:0,cursor:'pointer'}}>{uploading===d.id?'…':'Upload'}<input type="file" style={{display:'none'}} onChange={e=>e.target.files[0]&&doUpload(d.id,e.target.files[0])}/></label>}{canDelete(d)&&<button className="btn btn-xs" style={{background:'#fee2e2',color:'#dc2626',border:'none',cursor:'pointer'}} onClick={()=>doDelete(d)} disabled={deleting===d.id}>{deleting===d.id?'…':'🗑'}</button>}</div>))}</div>);
 }
 
 function ConsentSection({audit,onRefresh}){
@@ -167,6 +202,51 @@ function ConsentSection({audit,onRefresh}){
   if(!consent)return(<div className="consent-box"><div style={{fontSize:32,marginBottom:8}}>🔗</div><div style={{fontWeight:700,fontSize:15,marginBottom:8}}>Account Aggregator Consent</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:16,lineHeight:1.6}}>Send a consent request to fetch GST returns, ITR and bank statements automatically via RBI's Account Aggregator framework.</div><button className="btn btn-p" onClick={request} disabled={sending}>{sending?'Sending…':'📤 Send Consent Request to Borrower'}</button></div>);
   if(consent.status==='pending')return(<div><div className="alert alert-a">⏳ Consent request sent. Awaiting borrower approval.</div>{(user.role==='borrower'||user.role==='admin')&&<div className="consent-box" style={{marginTop:12}}><div style={{fontSize:28,marginBottom:8}}>📱</div><div style={{fontWeight:700,fontSize:14,marginBottom:8}}>Approve Data Sharing</div><div style={{display:'flex',justifyContent:'center',gap:8,marginBottom:14,flexWrap:'wrap'}}>{['✅ GST Returns','✅ ITR (2 years)','✅ Bank Statements'].map(t=><span key={t} className="badge b-blue">{t}</span>)}</div><div style={{fontSize:12,color:'var(--gray)',marginBottom:14}}>Purpose: Stock audit · {audit.bank_name} · Read-only · 30 days</div><button className="btn btn-g" style={{width:'100%',justifyContent:'center'}} onClick={approve} disabled={approving}>{approving?'Processing…':'✅ Approve & Share via AA'}</button></div>}</div>);
   return(<div className="alert alert-g">✅ <strong>Consent approved.</strong> GST returns, ITR and bank statements auto-fetched. Expires: {fmtDate(consent.expires_at)}</div>);
+}
+
+function RateModal({audit,onClose}){
+  const[rating,setRating]=useState(5);
+  const[comment,setComment]=useState('');
+  const[saving,setSaving]=useState(false);
+  const[done,setDone]=useState(false);
+  async function save(){setSaving(true);await API.post(`/api/audits/${audit.id}/rate`,{rating,comment});setSaving(false);setDone(true);setTimeout(onClose,1500);}
+  return(<div className="remind-modal" onClick={onClose}><div className="remind-box" onClick={e=>e.stopPropagation()}>
+    <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>Rate CA Performance</div>
+    <div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>{audit.ca?.name} · {audit.borrower_name}</div>
+    {done?<div className="alert alert-g">✅ Rating saved! Thank you.</div>:<>
+    <div className="fg"><label>Rating</label>
+      <div style={{display:'flex',gap:8,marginTop:4}}>{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{fontSize:24,background:'none',border:'none',cursor:'pointer',opacity:n<=rating?1:0.3}}>★</button>)}</div>
+      <div style={{fontSize:12,color:'var(--gray)',marginTop:4}}>{['','Poor','Below Average','Average','Good','Excellent'][rating]}</div>
+    </div>
+    <div className="fg"><label>Comment (optional)</label><textarea value={comment} onChange={e=>setComment(e.target.value)} placeholder="Timeliness, quality of report, communication…" rows={3}/></div>
+    <div style={{display:'flex',gap:8}}><button className="btn btn-p" onClick={save} disabled={saving}>{saving?'Saving…':'⭐ Submit Rating'}</button><button className="btn btn-o" onClick={onClose}>Cancel</button></div>
+    </>}
+  </div></div>);
+}
+
+function ReferralModal({onClose}){
+  const{user}=useAuth();
+  const[name,setName]=useState('');
+  const[email,setEmail]=useState('');
+  const[msg,setMsg]=useState('');
+  const[sending,setSending]=useState(false);
+  const[done,setDone]=useState('');
+  const[err,setErr]=useState('');
+  async function send(e){e.preventDefault();if(!name||!email)return;setSending(true);setErr('');
+    const r=await API.post('/api/refer',{name,email,message:msg});setSending(false);
+    if(r.error){setErr(r.error);}else{setDone(r.status==='already_registered'?email+' is already on AuditFlow — invite sent!':'Invite sent to '+email+'! They\'ll receive login credentials.');setTimeout(onClose,2500);}
+  }
+  return(<div className="remind-modal" onClick={onClose}><div className="remind-box" onClick={e=>e.stopPropagation()}>
+    <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>Invite to AuditFlow</div>
+    <div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>Invite a CA, banker, or borrower. They'll get an email with login credentials.</div>
+    {done?<div className="alert alert-g">✅ {done}</div>:<form onSubmit={send}>
+      {err&&<div className="alert" style={{background:'#fee2e2',color:'#dc2626',marginBottom:8}}>{err}</div>}
+      <div className="fg"><label>Their Name</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Rajesh Kumar" required/></div>
+      <div className="fg"><label>Their Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="rajesh@example.com" required/></div>
+      <div className="fg"><label>Personal Note (optional)</label><textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Hey, I've been using AuditFlow and thought you'd find it useful for your audits…" rows={2}/></div>
+      <div style={{display:'flex',gap:8}}><button type="submit" className="btn btn-p" disabled={sending}>{sending?'Sending…':'📨 Send Invite'}</button><button type="button" className="btn btn-o" onClick={onClose}>Cancel</button></div>
+    </form>}
+  </div></div>);
 }
 
 function RemindModal({audit,onClose}){
@@ -282,10 +362,19 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
   const[advancing,setAdvancing]=useState(false);
   const[showReport,setShowReport]=useState(false);
   const[showRemind,setShowRemind]=useState(false);
+  const[showRate,setShowRate]=useState(false);
+  const[cancelling,setCancelling]=useState(false);
   const load=useCallback(()=>{API.get(`/api/audits/${auditId}`).then(setAudit);},[auditId]);
   useEffect(()=>{load();},[load]);
   function refresh(){load();if(pr)pr();}
   async function advance(){const cur=SI[audit.stage]||0;const next=STAGES[cur+1];if(!next)return;setAdvancing(true);await API.put(`/api/audits/${auditId}/stage`,{stage:next.key});setAdvancing(false);load();}
+  async function cancelAudit(){
+    if(!window.confirm('Cancel this audit? CA and borrower will be notified by email. This cannot be undone.'))return;
+    setCancelling(true);
+    const r=await API.del(`/api/audits/${auditId}`);
+    setCancelling(false);
+    if(r.error){alert(r.error);}else{onClose();if(pr)pr();}
+  }
   if(!audit)return(<><div className="overlay open" onClick={onClose}/><div className="dp open"><div className="dpb" style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--gray)'}}>Loading…</div></div></>);
   const dl=daysLeft(audit.deadline);
   const pct=stageProgress(audit.stage);
@@ -293,7 +382,7 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
   const canUpload=user.role==='borrower'||user.role==='ca';
   if(showReport)return(<div style={{position:'fixed',inset:0,background:'#f0f4f8',zIndex:300,overflow:'auto',padding:24}}><ReportForm audit={audit} onClose={()=>setShowReport(false)} onRefresh={refresh}/></div>);
   const tabs=[{key:'workflow',label:'📋 Workflow'},{key:'docs',label:`📁 Docs (${audit.documents?.length||0})`},{key:'consent',label:'🔗 AA Consent'},{key:'invoice',label:'🧾 Invoice'}];
-  return(<><div className="overlay open" onClick={onClose}/><div className="dp open">{showRemind&&<RemindModal audit={audit} onClose={()=>setShowRemind(false)}/>}
+  return(<><div className="overlay open" onClick={onClose}/><div className="dp open">{showRemind&&<RemindModal audit={audit} onClose={()=>setShowRemind(false)}/>}{showRate&&<RateModal audit={audit} onClose={()=>{setShowRate(false);load();}}/>}
     <div className="dph"><div><div style={{fontWeight:800,fontSize:15}}>{audit.borrower_name}</div><div style={{fontSize:11.5,color:'var(--gray)',marginTop:2}}>{audit.id} · {audit.bank_name}, {audit.branch}</div></div><button className="btn btn-o btn-sm" onClick={onClose}>✕</button></div>
     <div style={{padding:'12px 22px',borderBottom:'1px solid var(--gray-m)'}}>
       {audit.inadequate_dp&&<div className="inadp-banner"><span style={{fontSize:20}}>⚠</span><div><div style={{fontWeight:700,fontSize:13,color:'var(--red)'}}>INADEQUATE DP</div><div style={{fontSize:12,color:'var(--red)'}}>DP ₹{audit.dp_calculated?.toLocaleString('en-IN')} &lt; Outstanding</div></div></div>}
@@ -307,12 +396,12 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
         <div style={{display:'flex',gap:8,margin:'14px 0',flexWrap:'wrap'}}>
           {canAdvance&&audit.stage!=='finalized'&&<button className="btn btn-p" onClick={advance} disabled={advancing} style={{flex:1,justifyContent:'center'}}>{advancing?'…':`→ ${STAGES[(SI[audit.stage]||0)+1]?.label}`}</button>}
           {(user.role==='ca'||user.role==='admin')&&<button className="btn btn-o" onClick={()=>setShowReport(true)} style={{flex:1,justifyContent:'center'}}>📝 {audit.report?.status==='finalized'?'View Report':'Fill RBI Report'}</button>}
-          {user.role==='banker'&&<><button className="btn btn-o btn-sm" onClick={()=>setShowRemind(true)}>📤 Remind</button>{audit.report&&<button className="btn btn-o btn-sm" onClick={()=>setShowReport(true)}>📄 Report</button>}</>}
+          {user.role==='banker'&&<><button className="btn btn-o btn-sm" onClick={()=>setShowRemind(true)}>📤 Remind</button>{audit.report&&<button className="btn btn-o btn-sm" onClick={()=>setShowReport(true)}>📄 Report</button>}{audit.stage==='finalized'&&!audit.ca_rating&&<button className="btn btn-sm" style={{background:'#fef9c3',color:'#854d0e',border:'1.5px solid #fde047',borderRadius:7,fontWeight:600,cursor:'pointer',padding:'6px 12px'}} onClick={()=>setShowRate(true)}>⭐ Rate CA</button>}{audit.ca_rating&&<span style={{fontSize:12,color:'#f59e0b',fontWeight:700}}>{'★'.repeat(audit.ca_rating)} {audit.ca_rating}/5</span>}{['initiated','docs_requested'].includes(audit.stage)&&<button className="btn btn-xs" style={{background:'#fee2e2',color:'#dc2626',border:'none',cursor:'pointer',padding:'6px 12px',borderRadius:7,fontWeight:600}} onClick={cancelAudit} disabled={cancelling}>{cancelling?'Cancelling…':'🗑 Cancel Audit'}</button>}</>}
         </div>
         <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Activity Timeline</div>
         {(audit.timeline||[]).map((t,i)=>{const isWarn=t.note.includes('⚠');const isGreen=t.note.includes('approved')||t.note.includes('completed')||t.note.includes('finalized')||t.note.includes('uploaded');return(<div key={i} className="tl-item"><div className={`tl-dot ${isWarn?'r':isGreen?'g':''}` }/><div><div style={{fontSize:13,color:isWarn?'var(--red)':'inherit'}}>{t.note}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:1}}>{t.actor} · {fmtDate(t.created_at)}</div></div></div>);})}
       </div>}
-      {tab==='docs'&&<DocList docs={audit.documents||[]} auditId={audit.id} onRefresh={load} canUpload={canUpload}/>}
+      {tab==='docs'&&<div><DriveLink audit={audit} user={user} onRefresh={load}/><DocList docs={audit.documents||[]} auditId={audit.id} auditStage={audit.stage} onRefresh={load} canUpload={canUpload&&audit.stage!=='finalized'} user={user}/></div>}
       {tab==='consent'&&<ConsentSection audit={audit} onRefresh={load}/>}
       {tab==='invoice'&&<InvoiceSection audit={audit} onRefresh={load}/>}
     </div>
@@ -350,12 +439,13 @@ function CADashboard({setPanel}){
   const[audits,setAudits]=useState([]);
   const[filter,setFilter]=useState('all');
   useEffect(()=>{API.get('/api/audits').then(setAudits);},[]);
-  const active=audits.filter(a=>a.stage!=='finalized');
-  const urgent=audits.filter(a=>{const d=daysLeft(a.deadline);return d!==null&&d<=3&&a.stage!=='finalized';});
-  const actionNeeded=audits.filter(a=>['visit_done','draft_ready'].includes(a.stage));
-  const earn=audits.filter(a=>a.pay_status==='pending').reduce((s,a)=>s+Math.round((a.fee||0)*1.18),0);
-  const filters=[{key:'all',label:'All',count:audits.length},{key:'active',label:'Active',count:active.length},{key:'urgent',label:'Urgent (≤3d)',count:urgent.length},{key:'action',label:'Action Needed',count:actionNeeded.length},{key:'finalized',label:'Finalized',count:audits.filter(a=>a.stage==='finalized').length},{key:'inadp',label:'⚠ Inad. DP',count:audits.filter(a=>a.inadequate_dp).length}];
-  const filtered=audits.filter(a=>{if(filter==='active')return a.stage!=='finalized';if(filter==='urgent'){const d=daysLeft(a.deadline);return d!==null&&d<=3&&a.stage!=='finalized';}if(filter==='action')return['visit_done','draft_ready'].includes(a.stage);if(filter==='finalized')return a.stage==='finalized';if(filter==='inadp')return a.inadequate_dp;return true;});
+  const nonCancelled=audits.filter(a=>a.stage!=='cancelled');
+  const active=nonCancelled.filter(a=>a.stage!=='finalized');
+  const urgent=nonCancelled.filter(a=>{const d=daysLeft(a.deadline);return d!==null&&d<=3&&a.stage!=='finalized';});
+  const actionNeeded=nonCancelled.filter(a=>['visit_done','draft_ready'].includes(a.stage));
+  const earn=nonCancelled.filter(a=>a.pay_status==='pending').reduce((s,a)=>s+Math.round((a.fee||0)*1.18),0);
+  const filters=[{key:'all',label:'All',count:nonCancelled.length},{key:'active',label:'Active',count:active.length},{key:'urgent',label:'Urgent (≤3d)',count:urgent.length},{key:'action',label:'Action Needed',count:actionNeeded.length},{key:'finalized',label:'Finalized',count:nonCancelled.filter(a=>a.stage==='finalized').length},{key:'inadp',label:'⚠ Inad. DP',count:nonCancelled.filter(a=>a.inadequate_dp).length},{key:'cancelled',label:'Cancelled',count:audits.filter(a=>a.stage==='cancelled').length}];
+  const filtered=audits.filter(a=>{if(filter==='cancelled')return a.stage==='cancelled';if(a.stage==='cancelled')return false;if(filter==='active')return a.stage!=='finalized';if(filter==='urgent'){const d=daysLeft(a.deadline);return d!==null&&d<=3&&a.stage!=='finalized';}if(filter==='action')return['visit_done','draft_ready'].includes(a.stage);if(filter==='finalized')return a.stage==='finalized';if(filter==='inadp')return a.inadequate_dp;return true;});
   return(<div className="page">
     <div className="section-t mb-4">Good morning 👋</div>
     <div className="sg">
@@ -587,6 +677,59 @@ function AuthScreen({onLogin}){
   </div></div>);
 }
 
+// ── CA PUBLIC PROFILE PAGE (in-app) ──────────────────────────────────────────
+function CAPublicProfilePage({user}){
+  const[profile,setProfile]=useState(null);
+  const appUrl=(window.location.origin);
+  const profileUrl=user.icai_no?`${appUrl}/profile/ca/${user.icai_no}`:null;
+  useEffect(()=>{if(user.icai_no)API.get(`/api/profile/ca/${user.icai_no}`).then(setProfile);},[user.icai_no]);
+  function copyLink(){if(profileUrl){navigator.clipboard.writeText(profileUrl);alert('Profile link copied! Share it with bankers to showcase your credentials.');}}
+  if(!user.icai_no)return(<div className="page"><div className="card" style={{padding:24,textAlign:'center'}}><div style={{fontSize:32,marginBottom:12}}>🌟</div><div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Complete Your Profile First</div><div style={{color:'var(--gray)',marginBottom:16}}>Add your ICAI Membership Number in Settings to activate your public profile.</div><button className="btn btn-p" onClick={()=>{}}>Go to Settings →</button></div></div>);
+  if(!profile)return(<div className="page"><div style={{color:'var(--gray)',padding:24}}>Loading your profile…</div></div>);
+  const stars=(n)=>n?'★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n)):'—';
+  return(<div className="page">
+    <div className="card" style={{padding:0,overflow:'hidden',marginBottom:16}}>
+      <div style={{background:'linear-gradient(135deg,#1d4ed8,#3b82f6)',padding:'28px 24px',color:'#fff'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+          <div><div style={{fontWeight:800,fontSize:22,marginBottom:4}}>{profile.name}</div>
+            <div style={{fontSize:13,opacity:.85}}>{profile.firm_name||'Independent CA'} {profile.icai_no&&'· ICAI '+profile.icai_no}</div>
+            <div style={{fontSize:13,opacity:.85}}>{profile.city||''}</div>
+          </div>
+          {profile.avg_rating&&<div style={{background:'rgba(255,255,255,.2)',borderRadius:12,padding:'8px 16px',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800}}>★ {profile.avg_rating}</div><div style={{fontSize:11,opacity:.8}}>{profile.rating_count} ratings</div></div>}
+        </div>
+      </div>
+      <div style={{padding:24}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:12,marginBottom:24}}>
+          {[{v:profile.completed_audits||0,l:'Audits Completed'},{v:profile.total_audits||0,l:'Total Assigned'},{v:profile.avg_rating?stars(profile.avg_rating)+' '+profile.avg_rating+'/5':'No ratings',l:'Avg Rating'},{v:profile.total_exposure_cr?'₹'+profile.total_exposure_cr+'Cr':'—',l:'Exposure Audited'},{v:profile.on_time_rate!==null?profile.on_time_rate+'%':'—',l:'On-Time Rate'},{v:profile.banks_worked_with||0,l:'Banks Served'}].map(s=>(
+            <div key={s.l} style={{background:'#f8fafc',borderRadius:12,padding:14,textAlign:'center'}}>
+              <div style={{fontSize:20,fontWeight:800,color:'#1d4ed8'}}>{s.v}</div>
+              <div style={{fontSize:11,color:'var(--gray)',marginTop:2}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+        {profile.top_sectors?.length>0&&<div style={{marginBottom:16}}><div style={{fontSize:12,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',marginBottom:8}}>Top Sectors</div>{profile.top_sectors.map(s=><span key={s} style={{display:'inline-block',background:'#eff6ff',color:'#1d4ed8',borderRadius:6,padding:'3px 10px',fontSize:12,fontWeight:600,marginRight:6,marginBottom:4}}>{s}</span>)}</div>}
+        {profile.bank_names?.length>0&&<div style={{marginBottom:16}}><div style={{fontSize:12,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',marginBottom:8}}>Banks Worked With</div>{profile.bank_names.map(b=><span key={b} style={{display:'inline-block',background:'#f0fdf4',color:'#16a34a',borderRadius:6,padding:'3px 10px',fontSize:12,fontWeight:600,marginRight:6,marginBottom:4}}>🏦 {b}</span>)}</div>}
+        {profile.featured_assignments?.length>0&&<div style={{marginBottom:16}}><div style={{fontSize:12,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',marginBottom:8}}>Featured Assignments</div>
+          {profile.featured_assignments.map((a,i)=><div key={i} style={{background:'#f8fafc',borderRadius:10,padding:'12px 14px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div><div style={{fontWeight:700,fontSize:13}}>{a.bank}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>{a.sector}{a.exposure?' · ₹'+Number(a.exposure).toLocaleString('en-IN')+' exposure':''}{a.year?' · '+a.year:''}</div></div>
+            {a.rating&&<span style={{color:'#f59e0b',fontWeight:700,fontSize:13}}>★ {a.rating}</span>}
+          </div>)}
+        </div>}
+      </div>
+    </div>
+    {profileUrl&&<div className="card" style={{padding:20}}>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:8}}>🔗 Your Shareable Profile Link</div>
+      <div style={{fontSize:12,color:'var(--gray)',marginBottom:12}}>Share this with bankers, on LinkedIn, or in your email signature. No login needed to view it.</div>
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{flex:1,background:'#f8fafc',border:'1.5px solid var(--gray-m)',borderRadius:8,padding:'8px 12px',fontSize:12,color:'var(--gray)',wordBreak:'break-all'}}>{profileUrl}</div>
+        <button className="btn btn-p btn-sm" onClick={copyLink}>📋 Copy Link</button>
+        <a href={profileUrl} target="_blank" className="btn btn-o btn-sm">👁 Preview</a>
+      </div>
+      <div style={{marginTop:12,fontSize:12,color:'var(--gray)'}}>💡 Your profile updates automatically as you complete more audits and receive ratings.</div>
+    </div>}
+  </div>);
+}
+
 // ── APP SHELL ─────────────────────────────────────────────────────────────────
 function App(){
   const[user,setUser]=useState(null);
@@ -598,13 +741,14 @@ function App(){
   function logout(){localStorage.removeItem('af_token');setUser(null);setPage('dashboard');}
   if(loading)return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f0f4f8',color:'var(--gray)',fontSize:15}}>⚡ Loading AuditFlow…</div>;
   if(!user)return<AuthCtx.Provider value={{user,setUser}}><AuthScreen onLogin={setUser}/></AuthCtx.Provider>;
+  const[showReferral,setShowReferral]=useState(false);
   const isCA=user.role==='ca',isBanker=user.role==='banker',isBorrower=user.role==='borrower';
-  const nav=isCA?[{key:'dashboard',icon:'🏠',label:'Dashboard'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'invoices',icon:'🧾',label:'Invoices'},{key:'profile',icon:'👤',label:'Profile'}]:isBanker?[{key:'dashboard',icon:'🏠',label:'Portfolio'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'profile',icon:'👤',label:'Profile'}]:[{key:'dashboard',icon:'🏠',label:'My Audits'},{key:'profile',icon:'👤',label:'Profile'}];
+  const nav=isCA?[{key:'dashboard',icon:'🏠',label:'Dashboard'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'invoices',icon:'🧾',label:'Invoices'},{key:'ca-profile',icon:'🌟',label:'My Public Profile'},{key:'profile',icon:'👤',label:'Settings'},{key:'invite',icon:'📨',label:'Invite Someone'}]:isBanker?[{key:'dashboard',icon:'🏠',label:'Portfolio'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'profile',icon:'👤',label:'Profile'},{key:'invite',icon:'📨',label:'Invite Someone'}]:[{key:'dashboard',icon:'🏠',label:'My Audits'},{key:'profile',icon:'👤',label:'Profile'},{key:'invite',icon:'📨',label:'Invite Someone'}];
   if(initiating)return<AuthCtx.Provider value={{user,setUser}}><div className="app"><div className="sidebar"><div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div><nav className="nav">{nav.map(n=><div key={n.key} className="ni" onClick={()=>{setInitiating(false);setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav><div className="sf"><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av">{initials(user.name)}</div><div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#94a3b8',fontSize:11}}>{user.role.toUpperCase()}</div></div></div></div></div><div className="main"><div className="topbar"><div style={{fontWeight:700,color:'#374151'}}>Initiate Audit</div><button className="btn btn-o btn-sm" onClick={logout}>Logout</button></div><InitiateAudit onDone={(id)=>{setInitiating(false);setPage('dashboard');if(id)setPanel(id);}}/></div></div></AuthCtx.Provider>;
   return(<AuthCtx.Provider value={{user,setUser}}><div className="app">
     <div className="sidebar">
       <div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div>
-      <nav className="nav">{nav.map(n=><div key={n.key} className={`ni ${page===n.key?'active':''}`} onClick={()=>{if(n.key==='initiate')setInitiating(true);else setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav>
+      <nav className="nav">{nav.map(n=><div key={n.key} className={`ni ${page===n.key?'active':''}`} onClick={()=>{if(n.key==='initiate')setInitiating(true);else if(n.key==='invite'){setShowReferral(true);}else setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav>
       <div className="sf"><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av">{initials(user.name)}</div><div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#94a3b8',fontSize:11}}>{user.role.toUpperCase()}</div></div></div></div>
     </div>
     <div className="main">
@@ -614,7 +758,9 @@ function App(){
       {page==='dashboard'&&isBorrower&&<BorrowerPortal setPanel={setPanel}/>}
       {page==='invoices'&&isCA&&<CAInvoices/>}
       {page==='profile'&&<ProfilePage/>}
+      {page==='ca-profile'&&isCA&&<CAPublicProfilePage user={user}/>}
     </div>
+    {showReferral&&<ReferralModal onClose={()=>setShowReferral(false)}/>}
     {panel&&<AuditPanel auditId={panel} onClose={()=>setPanel(null)} onRefresh={()=>{}}/>}
   </div></AuthCtx.Provider>);
 }

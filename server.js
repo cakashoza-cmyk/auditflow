@@ -652,6 +652,227 @@ app.post('/api/auth/reset-password', async function(req, res) {
   res.json({ ok: true });
 });
 
+// ── DELETE AUDIT (Banker/Admin only) ────────────────────────────────────────
+// Allowed only if stage is 'initiated' or 'docs_requested' — CA hasn't done
+// substantive work yet. Beyond that the audit is a compliance record.
+app.delete('/api/audits/:id', auth(['banker','admin']), function(req, res) {
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Audit not found' });
+  const lockedStages = ['visit_scheduled','visit_done','draft_ready','finalized'];
+  if (lockedStages.includes(audit.stage)) {
+    return res.status(403).json({ error: 'Cannot cancel audit after site visit has been scheduled. Contact your CA directly.' });
+  }
+  // Notify CA if assigned
+  const ca = audit.ca_id ? dbFindOne('users', { id: audit.ca_id }) : null;
+  if (ca) {
+    sendEmail({ to: ca.email, toName: ca.name,
+      subject: '[AuditFlow] Audit cancelled: ' + audit.borrower_name,
+      body: 'Dear ' + ca.name + ',\n\nThe stock audit for ' + audit.borrower_name + ' (ID: ' + audit.id + ') has been cancelled by ' + req.user.name + ' (' + (audit.bank_name||'Bank') + ').\n\nNo further action is required from your side for this audit.\n\nRegards,\nTeam AuditFlow',
+      type: 'audit_cancelled_ca' });
+  }
+  // Notify borrower if registered
+  const borrower = audit.borrower_id ? dbFindOne('users', { id: audit.borrower_id }) : null;
+  const borrowerEmail = (borrower && borrower.email) || audit.borrower_email;
+  if (borrowerEmail) {
+    sendEmail({ to: borrowerEmail, toName: audit.borrower_name,
+      subject: '[AuditFlow] Your stock audit has been cancelled',
+      body: 'Dear ' + audit.borrower_name + ',\n\nYour stock audit (ID: ' + audit.id + ') initiated by ' + (audit.bank_name||'your bank') + ' has been cancelled.\n\nIf you believe this is an error, please contact your bank directly.\n\nRegards,\nTeam AuditFlow',
+      type: 'audit_cancelled_borrower' });
+  }
+  // Soft-delete: mark as cancelled (preserves record, removes from active views)
+  dbUpdate('audits', { id: req.params.id }, { stage: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: req.user.name });
+  addTimeline(req.params.id, 'Audit cancelled by ' + req.user.name, req.user.name);
+  res.json({ ok: true });
+});
+
+// ── DELETE DOCUMENT (uploader, CA, borrower, banker — not after finalized) ──
+// A CA or borrower can delete a wrongly uploaded file to re-upload the correct one.
+// Banker can remove a document requirement they added by mistake.
+// Nobody can delete documents from a finalized audit.
+app.delete('/api/audits/:id/documents/:docId', auth(), function(req, res) {
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Audit not found' });
+  if (audit.stage === 'finalized') {
+    return res.status(403).json({ error: 'Cannot delete documents from a finalized audit.' });
+  }
+  const doc = dbFindOne('documents', { id: parseInt(req.params.docId), audit_id: req.params.id });
+  if (!doc) return res.status(404).json({ error: 'Document not found' });
+  // Only the uploader, the banker who owns the audit, or admin can delete
+  const isUploader  = doc.uploaded_by && doc.uploaded_by === req.user.id;
+  const isAuditOwner = audit.banker_id && audit.banker_id === req.user.id;
+  const isAdmin     = req.user.role === 'admin';
+  const isBanker    = req.user.role === 'banker';
+  if (!isUploader && !isAuditOwner && !isAdmin && !isBanker) {
+    return res.status(403).json({ error: 'You can only delete documents you uploaded.' });
+  }
+  // Delete physical file from disk
+  if (doc.file_path) {
+    const fullPath = path.join(UPLOADS, path.basename(doc.file_path));
+    try { fs.unlinkSync(fullPath); } catch(e) { /* file may already be gone */ }
+  }
+  // If it was a banker-created doc requirement, remove it entirely
+  // If it was a system doc with an uploaded file, just reset it to pending
+  if (doc.source === 'Manual' && isBanker) {
+    const db = loadDB();
+    db.documents = db.documents.filter(function(d) { return !(d.id === parseInt(req.params.docId) && d.audit_id === req.params.id); });
+    saveDB(db);
+    addTimeline(req.params.id, 'Document requirement removed: ' + doc.name, req.user.name);
+  } else {
+    dbUpdate('documents', { id: parseInt(req.params.docId), audit_id: req.params.id },
+      { status: 'pending', file_path: null, uploaded_by: null });
+    addTimeline(req.params.id, 'Document deleted and reset to pending: ' + doc.name, req.user.name);
+  }
+  res.json({ ok: true });
+});
+
+// ── RATE CA (Banker only, after finalized) ───────────────────────────────────
+app.post('/api/audits/:id/rate', auth(['banker','admin']), function(req, res) {
+  const { rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1-5' });
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  if (audit.stage !== 'finalized') return res.status(400).json({ error: 'Can only rate after audit is finalized' });
+  dbUpdate('audits', { id: req.params.id }, { ca_rating: rating, ca_rating_comment: comment||'', ca_rated_by: req.user.name, ca_rated_at: new Date().toISOString() });
+  addTimeline(req.params.id, 'CA rated ' + rating + '/5 by ' + req.user.name + (comment ? ': "' + comment + '"' : ''), req.user.name);
+  res.json({ ok: true });
+});
+
+// ── SET DRIVE LINK (Banker or CA) ────────────────────────────────────────────
+app.put('/api/audits/:id/drive-link', auth(['banker','admin','ca']), function(req, res) {
+  const { drive_link } = req.body;
+  if (!dbFindOne('audits', { id: req.params.id })) return res.status(404).json({ error: 'Not found' });
+  dbUpdate('audits', { id: req.params.id }, { drive_link: drive_link||null });
+  addTimeline(req.params.id, drive_link ? 'Google Drive folder linked for documents' : 'Drive link removed', req.user.name);
+  res.json({ ok: true });
+});
+
+// ── CA PUBLIC PROFILE (no auth required) ─────────────────────────────────────
+app.get('/api/profile/ca/:icaiNo', function(req, res) {
+  const ca = dbFind('users', { role:'ca' }).find(function(u){ return u.icai_no === req.params.icaiNo; });
+  if (!ca) return res.status(404).json({ error: 'CA not found' });
+  const allAudits = dbFind('audits', { ca_id: ca.id });
+  const completed = allAudits.filter(function(a){ return a.stage === 'finalized'; });
+  const rated = completed.filter(function(a){ return a.ca_rating; });
+  const avgRating = rated.length ? (rated.reduce(function(s,a){ return s+(a.ca_rating||0); },0)/rated.length).toFixed(1) : null;
+  const totalExposure = completed.reduce(function(s,a){ return s+(parseFloat(a.exposure)||0); },0);
+  const onTime = completed.filter(function(a){ return a.deadline && a.updated_at && a.updated_at.split('T')[0] <= a.deadline; }).length;
+  const onTimeRate = completed.length ? Math.round(onTime/completed.length*100) : null;
+  const banks = [...new Set(allAudits.map(function(a){ return a.bank_name; }).filter(Boolean))];
+  const sectors = allAudits.reduce(function(acc,a){ if(a.constitution){acc[a.constitution]=(acc[a.constitution]||0)+1;} return acc; },{});
+  const topSectors = Object.entries(sectors).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0];});
+  const featured = completed.filter(function(a){ return a.ca_rating>=4; }).sort(function(a,b){ return (b.exposure||0)-(a.exposure||0); }).slice(0,5).map(function(a){
+    return { bank: a.bank_name, sector: a.constitution||'—', exposure: a.exposure, rating: a.ca_rating, year: (a.ca_rated_at||a.updated_at||'').slice(0,4) };
+  });
+  res.json({
+    name: ca.name, icai_no: ca.icai_no, firm_name: ca.firm_name||null, firm_reg_no: ca.firm_reg_no||null,
+    city: ca.city||null, phone: ca.phone||null, email: ca.email,
+    total_audits: allAudits.length, completed_audits: completed.length,
+    avg_rating: avgRating ? parseFloat(avgRating) : null, rating_count: rated.length,
+    total_exposure_cr: totalExposure ? (totalExposure/1e7).toFixed(1) : null,
+    on_time_rate: onTimeRate, banks_worked_with: banks.length, bank_names: banks,
+    top_sectors: topSectors, featured_assignments: featured,
+    member_since: ca.created_at ? ca.created_at.slice(0,7) : null
+  });
+});
+
+// ── PUBLIC PROFILE PAGE ───────────────────────────────────────────────────────
+app.get('/profile/ca/:icaiNo', function(req, res) {
+  const appUrl = process.env.APP_URL || ('http://localhost:' + PORT);
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CA Profile | AuditFlow</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f8;min-height:100vh;padding:24px 16px}
+.card{max-width:680px;margin:0 auto;background:#fff;border-radius:18px;box-shadow:0 4px 32px rgba(0,0,0,.10);overflow:hidden}
+.hdr{background:linear-gradient(135deg,#1d4ed8,#3b82f6);padding:32px 28px;color:#fff}
+.name{font-size:26px;font-weight:800;margin-bottom:4px}.sub{font-size:14px;opacity:.85;margin-bottom:2px}
+.body{padding:28px}.section{margin-bottom:24px}.sh{font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.stat{background:#f8fafc;border-radius:12px;padding:14px;text-align:center}
+.sv{font-size:28px;font-weight:800;color:#1d4ed8}.sl{font-size:11px;color:#6b7280;margin-top:2px}
+.stars{color:#f59e0b;font-size:18px}.tag{display:inline-block;background:#eff6ff;color:#1d4ed8;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;margin:3px 3px 0 0}
+.assign{background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.abank{font-weight:700;font-size:13px}.ameta{font-size:12px;color:#6b7280;margin-top:2px}
+.arating{color:#f59e0b;font-size:13px;font-weight:700}.cta{text-align:center;padding:20px;background:#f8fafc;border-top:1px solid #e5e7eb}
+.btn{display:inline-block;background:#1d4ed8;color:#fff;border-radius:10px;padding:12px 28px;font-weight:700;text-decoration:none;font-size:14px}
+.badge{display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#16a34a;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700}
+.info-row{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
+.il{color:#6b7280;width:120px;flex-shrink:0}.iv{font-weight:600}
+</style></head><body>
+<div class="card">
+  <div class="hdr">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="name" id="name">Loading…</div><div class="sub" id="firm"></div><div class="sub" id="city"></div></div>
+      <div id="badge"></div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="section"><div class="sh">Performance Stats</div><div class="stats" id="stats"></div></div>
+    <div class="section" id="sec-sectors" style="display:none"><div class="sh">Top Sectors</div><div id="sectors"></div></div>
+    <div class="section" id="sec-banks" style="display:none"><div class="sh">Banks Worked With</div><div id="banks"></div></div>
+    <div class="section" id="sec-featured" style="display:none"><div class="sh">Featured Assignments</div><div id="featured"></div></div>
+    <div class="section"><div class="sh">Contact & Details</div><div id="contact"></div></div>
+  </div>
+  <div class="cta"><div style="font-size:13px;color:#6b7280;margin-bottom:12px">Verified profile powered by AuditFlow</div>
+  <a href="${appUrl}" class="btn">🔗 View on AuditFlow</a></div>
+</div>
+<script>
+fetch('/api/profile/ca/${req.params.icaiNo}').then(r=>r.json()).then(d=>{
+  if(d.error){document.getElementById('name').textContent='Profile not found';return;}
+  document.getElementById('name').textContent=d.name;
+  document.getElementById('firm').textContent=d.firm_name||(d.icai_no?'ICAI: '+d.icai_no:'');
+  document.getElementById('city').textContent=d.city||'';
+  if(d.avg_rating){document.getElementById('badge').innerHTML='<div class="badge">★ '+d.avg_rating+' / 5</div>';}
+  const stars=d.avg_rating?'★'.repeat(Math.round(d.avg_rating))+'☆'.repeat(5-Math.round(d.avg_rating)):'—';
+  const stats=[
+    {v:d.completed_audits||0,l:'Audits Completed'},{v:d.total_audits||0,l:'Total Assigned'},
+    {v:d.avg_rating?'<span class=stars>'+stars+'</span><br><small>'+d.rating_count+' ratings</small>':'No ratings yet',l:'Avg Rating',html:true},
+    {v:d.total_exposure_cr?'₹'+d.total_exposure_cr+'Cr':'—',l:'Total Exposure Audited'},
+    {v:d.on_time_rate!==null?d.on_time_rate+'%':'—',l:'On-Time Completion'},
+    {v:d.banks_worked_with||0,l:'Banks Served'}
+  ];
+  document.getElementById('stats').innerHTML=stats.map(s=>'<div class=stat><div class=sv>'+(s.html?s.v:s.v)+'</div><div class=sl>'+s.l+'</div></div>').join('');
+  if(d.top_sectors&&d.top_sectors.length){document.getElementById('sec-sectors').style.display='';document.getElementById('sectors').innerHTML=d.top_sectors.map(s=>'<span class=tag>'+s+'</span>').join('');}
+  if(d.bank_names&&d.bank_names.length){document.getElementById('sec-banks').style.display='';document.getElementById('banks').innerHTML=d.bank_names.map(b=>'<span class=tag>🏦 '+b+'</span>').join('');}
+  if(d.featured_assignments&&d.featured_assignments.length){document.getElementById('sec-featured').style.display='';document.getElementById('featured').innerHTML=d.featured_assignments.map(a=>'<div class=assign><div><div class=abank>'+a.bank+'</div><div class=ameta>'+a.sector+(a.exposure?'  ·  ₹'+Number(a.exposure).toLocaleString(\"en-IN\")+' exposure':'')+(a.year?' · '+a.year:'')+'</div></div>'+(a.rating?'<div class=arating>★ '+a.rating+'</div>':'')+'</div>').join('');}
+  const rows=[[d.icai_no?'ICAI No.':'','ICAI: '+(d.icai_no||'—')],[d.firm_reg_no?'Firm Reg':'','Firm Reg: '+(d.firm_reg_no||'—')],[d.email?'Email':'',' '+d.email],[d.phone?'Phone':'','📞 '+d.phone],[d.member_since?'Member Since':'','AuditFlow member since '+(d.member_since||'')]].filter(r=>r[0]);
+  document.getElementById('contact').innerHTML=rows.map(r=>'<div class=info-row><span class=il>'+r[0]+'</span><span class=iv>'+r[1]+'</span></div>').join('');
+}).catch(()=>{document.getElementById('name').textContent='Failed to load profile';});
+</script></body></html>`);
+});
+
+// ── REFERRAL / INVITE ────────────────────────────────────────────────────────
+// Any logged-in user (banker, CA, borrower) can invite anyone by email.
+// If the email is new, a user account is created with a temp password.
+// If already registered, a "you've been invited to connect" email is sent instead.
+app.post('/api/refer', auth(), async function(req, res) {
+  const { name, email, message } = req.body;
+  if (!name || !email) return res.status(400).json({ error: 'Name and email required' });
+  const appUrl = process.env.APP_URL || ('http://localhost:' + PORT);
+  const existing = dbFindOne('users', { email });
+  if (existing) {
+    sendEmail({ to: email, toName: existing.name,
+      subject: req.user.name + ' invited you to AuditFlow',
+      body: 'Dear ' + existing.name + ',\n\n' + req.user.name + ' has invited you to collaborate on AuditFlow — India\'s stock audit platform.\n\n' + (message ? '"' + message + '"\n\n' : '') + 'Login: ' + appUrl + '\n\nTeam AuditFlow',
+      type: 'referral_existing' });
+    return res.json({ ok: true, status: 'already_registered' });
+  }
+  const tempPwd = Math.random().toString(36).slice(2,10);
+  const hash = await bcrypt.hash(tempPwd, 10);
+  dbInsert('users', { name, email, password: hash, role: 'invited',
+    referred_by: req.user.id, referred_by_name: req.user.name,
+    is_temp_password: true, created_at: new Date().toISOString() });
+  const body = 'Dear ' + name + ',\n\n' + req.user.name + ' has invited you to AuditFlow — the platform that is transforming how stock audits are done in India.\n\n' + (message ? '"' + message + '"\n\n' : '') +
+    'WHETHER YOU ARE A CA, BANKER, OR BORROWER:\n' +
+    '✓ CAs: Build a verified digital profile, get discovered by multiple banks, track all audits in one place\n' +
+    '✓ Bankers: Zero manual MIS, real-time audit status, automated reminders, rate your auditors\n' +
+    '✓ Borrowers: Submit documents once, track your audit live, no more follow-up calls\n\n' +
+    'GET STARTED IN 2 MINUTES\n' +
+    '👉 ' + appUrl + '\n' +
+    'Email: ' + email + '\n' +
+    'Password: ' + tempPwd + '\n\n' +
+    'Change your password after first login.\n\nTeam AuditFlow';
+  sendEmail({ to: email, toName: name, subject: req.user.name + ' invited you to AuditFlow — India\'s stock audit platform', body, type: 'referral_new' });
+  res.json({ ok: true, status: 'invited' });
+});
+
 app.get('*', function(_, res) { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 // ── SEED ─────────────────────────────────────────────────────────────────
