@@ -991,97 +991,109 @@ app.post('/api/refer', auth(), async function(req, res) {
     referred_by: req.user.id, referred_by_name: req.user.name,
     is_temp_password: true, created_at: new Date().toISOString() });
   const body = 'Dear ' + name + ',\n\n' + req.user.name + ' has invited you to AuditFlow — the platform that is transforming how stock audits are done in India.\n\n' + (message ? '"' + message + '"\n\n' : '') +
-    'WHETHER YOU ARE A CA, BANKER, OR BORROWER:\n' +
-    '✓ CAs: Build a verified digital profile, get discovered by multiple banks, track all audits in one place\n' +
-    '✓ Bankers: Zero manual MIS, real-time audit status, automated reminders, rate your auditors\n' +
-    '✓ Borrowers: Submit documents once, track your audit live, no more follow-up calls\n\n' +
-    'GET STARTED IN 2 MINUTES\n' +
-    '👉 ' + appUrl + '\n' +
+    'Your Login Details:\n' +
     'Email: ' + email + '\n' +
-    'Password: ' + tempPwd + '\n\n' +
-    'Change your password after first login.\n\nTeam AuditFlow';
-  sendEmail({ to: email, toName: name, subject: req.user.name + ' invited you to AuditFlow — India\'s stock audit platform', body, type: 'referral_new' });
-  res.json({ ok: true, status: 'invited' });
+    'Password: ' + tempPwd + ' (temporary — please change after login)\n' +
+    'Login: ' + appUrl + '\n\n' +
+    'AuditFlow helps you manage stock audits end-to-end — from document upload to final report.\n\n' +
+    'Team AuditFlow';
+  sendEmail({ to: email, toName: name, subject: req.user.name + ' invited you to AuditFlow', body, type: 'referral_new' });
+  res.json({ ok: true, status: 'invited', tempPwd });
 });
 
-app.get('*', function(_, res) { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
+// ── AI DOC TYPES ─────────────────────────────────────────────────────────────
+app.get('/api/ai-doc-types', auth(), function(req, res) {
+  res.json(Object.entries(AI_DOC_PROMPTS).map(([key, v]) => ({ key, label: v.label, description: v.description })));
+});
 
-// ── SEED ─────────────────────────────────────────────────────────────────
+// ── AI ANALYZE ───────────────────────────────────────────────────────────────
+app.post('/api/audits/:id/ai-analyze', auth(), upload.single('file'), async function(req, res) {
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Audit not found' });
+  const docType = req.body.doc_type;
+  if (!AI_DOC_PROMPTS[docType]) return res.status(400).json({ error: 'Unknown doc type' });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI not configured (GEMINI_API_KEY missing)' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const cfg = AI_DOC_PROMPTS[docType];
+  const base64Data = req.file.buffer.toString('base64');
+  const mimeType = req.file.mimetype || 'application/pdf';
+
+  const payload = JSON.stringify({
+    contents: [{
+      parts: [
+        { text: cfg.prompt },
+        { inline_data: { mime_type: mimeType, data: base64Data } }
+      ]
+    }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
+  });
+
+  const https = require('https');
+  const options = {
+    hostname: 'generativelanguage.googleapis.com',
+    path: '/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+  };
+
+  const geminiReq = https.request(options, function(geminiRes) {
+    let data = '';
+    geminiRes.on('data', chunk => data += chunk);
+    geminiRes.on('end', () => {
+      try {
+        const parsed = JSON.parse(data);
+        const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        // Try to extract JSON from the response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const extracted = JSON.parse(jsonMatch[0]);
+          // Store AI result on the audit
+          const audits = dbAll('audits');
+          const idx = audits.findIndex(a => a.id === req.params.id);
+          if (idx !== -1) {
+            if (!audits[idx].ai_results) audits[idx].ai_results = {};
+            audits[idx].ai_results[docType] = { result: extracted, analyzed_at: new Date().toISOString(), doc_type: docType, label: cfg.label };
+            saveDB();
+          }
+          res.json({ ok: true, doc_type: docType, label: cfg.label, result: extracted, raw: text });
+        } else {
+          res.json({ ok: true, doc_type: docType, label: cfg.label, result: null, raw: text });
+        }
+      } catch(e) {
+        res.status(500).json({ error: 'Failed to parse AI response', details: e.message });
+      }
+    });
+  });
+  geminiReq.on('error', err => res.status(500).json({ error: 'AI request failed', details: err.message }));
+  geminiReq.write(payload);
+  geminiReq.end();
+});
+
+// ── CATCH-ALL (serve React SPA) ───────────────────────────────────────────────
+app.get('*', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ── SEED DEMO ACCOUNTS ────────────────────────────────────────────────────────
 async function seedDemo() {
-  const db = loadDB();
-  if (db.users.length > 0) return;
-  console.log('Seeding demo data...');
-  const hash = await bcrypt.hash('demo1234', 10);
-  const banker   = dbInsert('users', { name:'Suresh Mehta',  email:'banker@demo.com',   password:hash, role:'banker',
-    bank_name:'Bank of Baroda', branch:'Surat Main', city:'Surat',
-    address:'Bank of Baroda, Ring Road, Surat 395002', phone:'9876500001',
-    icai_no:null, firm_name:null, firm_reg_no:null, gstin:null, pan:null, constitution:null, is_temp_password:false });
-  const ca       = dbInsert('users', { name:'CA Rajiv Shah', email:'ca@demo.com', password:hash, role:'ca',
-    bank_name:null, branch:null, city:'Surat', address:'Shah & Associates, Nanpura, Surat 395001',
-    phone:'9876543210', icai_no:'112847', firm_name:'Shah & Associates', firm_reg_no:'123456W',
-    gstin:'24ABCDE1234F1Z5', pan:null, constitution:null, is_temp_password:false });
-  const borrower = dbInsert('users', { name:'Rajan Mehta', email:'borrower@demo.com', password:hash, role:'borrower',
-    bank_name:null, branch:null, city:'Surat', address:'Plot 14, Pandesara GIDC, Surat 394221',
-    phone:'9876500003', icai_no:null, firm_name:null, firm_reg_no:null,
-    gstin:'24AXXXX1234Z1Z5', pan:'AXXXX1234Z', constitution:'Proprietorship', is_temp_password:false });
-
-  const a1 = 'AF-2024-0341';
-  dbInsert('audits',{ id:a1, borrower_id:borrower.id, banker_id:banker.id, ca_id:ca.id, ca_email:null,
-    borrower_email:'borrower@demo.com', banker_email:null, borrower_name:'Prakash Textiles',
-    bank_name:'Bank of Baroda', branch:'Surat Main', exposure:'42 L', constitution:'Proprietorship',
-    city:'Surat', cluster:'Textiles', stage:'visit_done', deadline:'2026-06-18', fee:4200,
-    pay_status:'not_raised', pay_date:null, notes:null, inadequate_dp:false, dp_calculated:null, initiated_by:'banker' });
-  defaultDocs(a1);
-  dbFind('documents',{audit_id:a1}).filter(function(d){ return d.source==='Auto-fetch via AA'; })
-    .forEach(function(d){ dbUpdate('documents',{id:d.id},{status:'aa_fetched'}); });
-  dbFind('documents',{audit_id:a1}).filter(function(d){ return d.name.includes('Stock')||d.name.includes('Sanction'); })
-    .forEach(function(d){ dbUpdate('documents',{id:d.id},{status:'uploaded'}); });
-  addTimeline(a1,'Audit initiated by Suresh Mehta','Suresh Mehta');
-  addTimeline(a1,'Assigned to CA Rajiv Shah (M.No. 112847, FRN: 123456W)','Suresh Mehta');
-  addTimeline(a1,'AA consent approved — GST, ITR, Bank Statements auto-fetched','Borrower');
-  addTimeline(a1,'Stock statement uploaded by customer','Rajan Mehta');
-  addTimeline(a1,'Site visit completed','CA Rajiv Shah');
-  dbInsert('reports',{ audit_id:a1,
-    data:JSON.stringify({ borrower_name:'Prakash Textiles', constitution:'Proprietorship', city:'Surat',
-      bank_name:'Bank of Baroda', branch:'Surat Main', exposure:'4200000', cluster:'Textiles',
-      outstanding:'3800000', dp_debtors:'800000', total_creditors:'200000',
-      stocks:[{},{},{},{},{},{ books:'4200000', physical:'4100000', diff:'100000' }] }),
-    status:'draft' });
-  dbInsert('aa_consents',{ audit_id:a1, borrower_id:borrower.id,
-    data_types:JSON.stringify(['gst','itr','bank_statement']), status:'approved', expires_at:'2026-07-11' });
-
-  const a2 = 'AF-2024-0338';
-  dbInsert('audits',{ id:a2, borrower_id:null, banker_id:banker.id, ca_id:ca.id, ca_email:null,
-    borrower_email:'krishna@demo.com', banker_email:null, borrower_name:'Krishna Auto Parts LLP',
-    bank_name:'HDFC Bank', branch:'Ahmedabad Industrial', exposure:'85 L', constitution:'LLP',
-    city:'Ahmedabad', cluster:'Auto Components', stage:'draft_ready', deadline:'2026-06-16', fee:7500,
-    pay_status:'not_raised', pay_date:null, notes:null, inadequate_dp:true, dp_calculated:6800000, initiated_by:'banker' });
-  defaultDocs(a2);
-  dbFind('documents',{audit_id:a2})
-    .filter(function(d){ return d.source==='Auto-fetch via AA'||d.name.includes('Stock')||d.name.includes('Sanction')||d.name.includes('Debtor'); })
-    .forEach(function(d){ dbUpdate('documents',{id:d.id},{status:d.source==='Auto-fetch via AA'?'aa_fetched':'uploaded'}); });
-  addTimeline(a2,'Audit initiated','Suresh Mehta');
-  addTimeline(a2,'All documents submitted','System');
-  addTimeline(a2,'Site visit completed','CA Rajiv Shah');
-  addTimeline(a2,'INADEQUATE DP: Calculated DP Rs.68,00,000 is less than outstanding Rs.82,00,000','CA Rajiv Shah');
-  addTimeline(a2,'Draft report prepared — pending final review','CA Rajiv Shah');
-
-  const a3 = 'AF-2024-0347';
-  dbInsert('audits',{ id:a3, borrower_id:null, banker_id:banker.id, ca_id:ca.id, ca_email:null,
-    borrower_email:'nikhil@demo.com', banker_email:null, borrower_name:'Nikhil Cold Storage',
-    bank_name:'Union Bank of India', branch:'Anand', exposure:'2.1 Cr', constitution:'Proprietorship',
-    city:'Anand', cluster:'Agro Processing', stage:'initiated', deadline:'2026-06-27', fee:14000,
-    pay_status:'not_raised', pay_date:null, notes:null, inadequate_dp:false, dp_calculated:null, initiated_by:'banker' });
-  defaultDocs(a3);
-  addTimeline(a3,'Audit initiated by Suresh Mehta','Suresh Mehta');
-  addTimeline(a3,'Welcome email sent to borrower','System');
-
-  console.log('Demo data ready.');
-  console.log('  banker@demo.com / ca@demo.com / borrower@demo.com  (password: demo1234)');
+  const demos = [
+    { name: 'Demo Banker', email: 'banker@demo.com', role: 'banker', password: 'demo1234' },
+    { name: 'Demo CA', email: 'ca@demo.com', role: 'ca', password: 'demo1234' },
+    { name: 'Demo Borrower', email: 'borrower@demo.com', role: 'borrower', password: 'demo1234' }
+  ];
+  for (const d of demos) {
+    if (!dbFindOne('users', { email: d.email })) {
+      const hash = await bcrypt.hash(d.password, 10);
+      dbInsert('users', { name: d.name, email: d.email, password: hash, role: d.role,
+        created_at: new Date().toISOString() });
+      console.log('Seeded demo:', d.email);
+    }
+  }
 }
 
-seedDemo().then(function() {
-  app.listen(PORT, function() {
-    console.log('AuditFlow v2 running at http://localhost:' + PORT);
-  });
+// ── START ─────────────────────────────────────────────────────────────────────
+seedDemo().then(() => {
+  app.listen(PORT, () => console.log('AuditFlow running on port', PORT));
 });
