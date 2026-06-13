@@ -153,14 +153,14 @@ function sendWelcomeEmail({ name, email, role, tempPassword, auditId, borrowerNa
   const loginUrl = process.env.APP_URL || 'http://localhost:3000';
   let subject, body;
   if (role === 'ca') {
-    subject = '[AuditFlow] New audit assignment: ' + borrowerName;
-    body = 'Dear ' + name + ',\n\nYou have been assigned a stock audit.\nBorrower: ' + borrowerName + '\nBank: ' + bankName + '\nAudit ID: ' + auditId + '\n\nLogin: ' + loginUrl + '\nEmail: ' + email + '\nPassword: ' + tempPassword + '\n\nChange your password after first login.\n\nTeam AuditFlow';
+    subject = '[AuditFlow] New audit assigned: ' + borrowerName + ', ' + bankName;
+    body = 'Dear ' + name + ',\n\nA new stock audit has been assigned to you through AuditFlow — a platform built to make CA work faster, more visible, and more rewarding.\n\nAUDIT DETAILS\nBorrower: ' + borrowerName + '\nBank: ' + bankName + '\nAudit ID: ' + auditId + '\n\nWHAT AUDITFLOW DOES FOR YOU TODAY\n✓ Borrower submits documents digitally — no chasing, no WhatsApp forwards\n✓ One-click reminders to borrowers for pending submissions\n✓ Invoice reconciliation built in — match stock statements automatically\n✓ All your active audits on one dashboard — no registers, no spreadsheets\n✓ Banker rates your work on completion — strong ratings bring more assignments\n\nWHAT\'S COMING FOR EMPANELLED CAs\n⚡ Single profile listed across multiple banks — one registration, many opportunities\n⚡ Auto-generated audit reports from submitted data\n⚡ E-signature and digital report submission\n⚡ Audit analytics — track your turnaround time, ratings, and earnings\n⚡ Mobile app for on-site audits\n⚡ Direct borrower communication log for compliance records\n\nEarly empanelled CAs get priority listing when new banks join the platform.\n\nBEGIN YOUR AUDIT\n👉 ' + loginUrl + '\nEmail: ' + email + '\nPassword: ' + tempPassword + '\n\nChange your password after first login.\n\nRegards,\nTeam AuditFlow';
   } else if (role === 'banker') {
-    subject = '[AuditFlow] Stock audit initiated: ' + borrowerName;
-    body = 'Dear ' + name + ',\n\nA stock audit has been initiated.\nBorrower: ' + borrowerName + '\nAudit ID: ' + auditId + '\nCA: ' + caName + ' (ICAI ' + icaiNo + ')\n\nLogin: ' + loginUrl + '\nEmail: ' + email + '\nPassword: ' + tempPassword + '\n\nTeam AuditFlow';
+    subject = '[AuditFlow] Audit initiated — ' + borrowerName + ' | ID: ' + auditId;
+    body = 'Dear ' + name + ',\n\nYour stock audit has been successfully initiated on AuditFlow.\n\nAUDIT SUMMARY\nBorrower: ' + borrowerName + '\nCA Assigned: ' + caName + ' (ICAI ' + icaiNo + ')\nAudit ID: ' + auditId + '\n\nWHAT AUDITFLOW IS HANDLING FOR YOU\n✓ Borrower and CA have been notified automatically\n✓ Document submissions tracked in real time — no manual follow-up\n✓ Automated reminders sent if submissions are pending\n✓ Full audit trail for compliance — no more MIS spreadsheets\n✓ Rate the CA on completion — builds a quality panel over time\n✓ All your audits in one place — status visible at a glance\n\nTRACK THIS AUDIT LIVE\n👉 ' + loginUrl + '\nEmail: ' + email + '\nPassword: ' + tempPassword + '\n\nChange your password after first login.\n\nRegards,\nTeam AuditFlow';
   } else {
-    subject = '[AuditFlow] Your stock audit has been initiated';
-    body = 'Dear ' + name + ',\n\nYour bank has initiated a stock audit.\nAudit ID: ' + auditId + '\nCA: ' + caName + ' (ICAI ' + icaiNo + ')\nBank: ' + bankName + '\n\nLogin: ' + loginUrl + '\nEmail: ' + email + '\nPassword: ' + tempPassword + '\n\nTeam AuditFlow';
+    subject = '[AuditFlow] Your stock audit just got easier — action needed';
+    body = 'Dear ' + name + ',\n\n' + bankName + ' has initiated a stock audit for your account. Instead of the usual back-and-forth of emails, phone calls, and physical document submissions, this audit will be conducted entirely through AuditFlow — a secure digital platform built for exactly this purpose.\n\nWHAT THIS MEANS FOR YOU\n✓ Submit documents once — no repeat requests for the same paper\n✓ See exactly where your audit stands, in real time\n✓ No more follow-up calls wondering what\'s pending\n✓ Everything on your phone or laptop, at your convenience\n\nYour audit has been assigned to ' + caName + ' (ICAI ' + icaiNo + ').\n\nLOGIN AND COMPLETE YOUR SUBMISSION IN MINUTES\n👉 ' + loginUrl + '\nEmail: ' + email + '\nPassword: ' + tempPassword + '\n\nChange your password after first login. If you face any difficulty, reply to this email.\n\nRegards,\nTeam AuditFlow';
   }
   return sendEmail({ to:email, toName:name, subject, body, type:'welcome_'+role });
 }
@@ -170,12 +170,12 @@ function sendReminderEmail({ auditId, borrowerName, bankName, caName, caEmail, b
   const stageLabel = { initiated:'Initiated', docs_requested:'Documents Requested', customer_submitted:'Customer Submitted', visit_scheduled:'Visit Scheduled', visit_done:'Visit Done', draft_ready:'Draft Ready', finalized:'Finalized' };
   if ((target==='ca'||target==='both') && caEmail) {
     const msg = customMessage || 'Reminder to expedite the stock audit for ' + borrowerName + '. Stage: ' + (stageLabel[stage]||stage);
-    sendEmail({ to:caEmail, toName:caName, subject:'[AuditFlow] Reminder: ' + borrowerName + ' audit (' + auditId + ')', body:'Dear ' + caName + ',\n\n' + msg + '\n\nAudit ID: ' + auditId + '\nLogin: http://localhost:3000\n\nRegards,\n' + senderName, type:'reminder_ca' });
+    sendEmail({ to:caEmail, toName:caName, subject:'[AuditFlow] Action needed: ' + borrowerName + ' audit (' + auditId + ')', body:'Dear ' + caName + ',\n\n' + msg + '\n\nAudit ID: ' + auditId + '\nLogin now to take action: ' + (process.env.APP_URL || 'http://localhost:3000') + '\n\nRegards,\n' + senderName + '\nPowered by AuditFlow', type:'reminder_ca' });
     messages.push('CA ' + caName);
   }
   if ((target==='borrower'||target==='both') && borrowerEmail) {
     const msg = customMessage || 'Reminder regarding your pending stock audit. Please submit required documents.';
-    sendEmail({ to:borrowerEmail, toName:borrowerName, subject:'[AuditFlow] Action needed: your stock audit (' + auditId + ')', body:'Dear ' + borrowerName + ',\n\n' + msg + '\n\nAudit ID: ' + auditId + '\nLogin: http://localhost:3000\n\nRegards,\n' + senderName, type:'reminder_borrower' });
+    sendEmail({ to:borrowerEmail, toName:borrowerName, subject:'[AuditFlow] Pending: documents required for your stock audit (' + auditId + ')', body:'Dear ' + borrowerName + ',\n\n' + msg + '\n\nSubmitting digitally takes minutes and avoids any delay in your audit clearance.\n\nAudit ID: ' + auditId + '\nLogin now: ' + (process.env.APP_URL || 'http://localhost:3000') + '\n\nRegards,\n' + senderName + '\nPowered by AuditFlow', type:'reminder_borrower' });
     messages.push('Borrower');
   }
   return messages;
@@ -360,7 +360,7 @@ app.post('/api/audits', auth(['banker','admin','ca']), async function(req, res) 
     } else {
       addTimeline(id, 'Assigned to CA ' + caName, req.user.name);
       sendEmail({ to:caEmail2, toName:caName, subject:'[AuditFlow] New audit assigned: ' + borrower_name,
-        body:'Dear ' + caName + ',\n\nNew audit assigned: ' + borrower_name + ' (' + bank_name + ', ' + branch + ')\nAudit ID: ' + id + '\n\nLogin: http://localhost:3000',
+        body:'Dear ' + caName + ',\n\nNew audit assigned: ' + borrower_name + ' (' + bank_name + ', ' + branch + ')\nAudit ID: ' + id + '\n\nLogin: ' + (process.env.APP_URL || 'http://localhost:3000') + '',
         type:'assignment_ca' });
     }
   }
@@ -427,7 +427,7 @@ app.put('/api/audits/:id', auth(['banker','admin','ca']), function(req, res) {
       }
       sendEmail({ to:ca.email, toName:ca.name,
         subject:'[AuditFlow] Audit re-assigned: ' + audit.borrower_name,
-        body:'Dear ' + ca.name + ',\n\nYou have been assigned the stock audit for ' + audit.borrower_name + '.\nAudit ID: ' + req.params.id + '\n\nLogin: http://localhost:3000',
+        body:'Dear ' + ca.name + ',\n\nYou have been assigned the stock audit for ' + audit.borrower_name + '.\nAudit ID: ' + req.params.id + '\n\nLogin: ' + (process.env.APP_URL || 'http://localhost:3000') + '',
         type:'reassignment_ca' });
     }
   }
