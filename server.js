@@ -560,6 +560,39 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
   const isPdf = mimeType === 'application/pdf';
   const isExcel = mimeType.includes('spreadsheet') || mimeType.includes('excel') || req.file.originalname.match(/\.xlsx?$/i);
 
+  function extractPdfText(buf) {
+    const s = buf.toString('latin1');
+    const texts = [];
+    const re1 = /\(([^)\\]|\\.)*\)\s*Tj/g;
+    let m;
+    while ((m = re1.exec(s)) !== null) {
+      texts.push(m[0].replace(/\)\s*Tj$/, '').replace(/^\(/, '').replace(/\\n/g, ' '));
+    }
+    const re2 = /\[([^\]]*)\]\s*TJ/g;
+    while ((m = re2.exec(s)) !== null) {
+      const parts = m[1].match(/\(([^)\\]|\\.)*\)/g) || [];
+      texts.push(parts.map(function(p){ return p.slice(1,-1); }).join(''));
+    }
+    // fallback: readable ascii runs
+    if (texts.length < 5) {
+      const fallback = s.replace(/[^\x20-\x7e\n]/g, ' ').replace(/ {3,}/g, ' ');
+      return fallback.slice(0, 12000);
+    }
+    return texts.join(' ').slice(0, 12000);
+  }
+  function extractExcelText(buf) {
+    // xlsx files are ZIP; extract readable strings by scanning for UTF-16 and ASCII text
+    const s = buf.toString('latin1');
+    const texts = [];
+    // Find XML-like shared strings in xlsx ZIP (often readable as latin1)
+    const re = /<t[^>]*>([^<]+)<\/t>/g;
+    let m;
+    while ((m = re.exec(s)) !== null) texts.push(m[1]);
+    if (texts.length > 0) return texts.join('\t').slice(0, 12000);
+    // fallback: printable ascii runs >= 4 chars
+    const runs = s.match(/[\x20-\x7e]{4,}/g) || [];
+    return runs.join(' ').slice(0, 12000);
+  }
   async function buildGroqPayload() {
     if (isImage) {
       const base64Data = req.file.buffer.toString('base64');
@@ -573,31 +606,15 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
       });
     }
     let textContent = '';
-    if (isPdf) {
-      try {
-        const pdfParse = require('pdf-parse');
-        const parsed = await pdfParse(req.file.buffer);
-        textContent = parsed.text.slice(0, 12000);
-      } catch(e) { textContent = '[Could not extract PDF text: ' + e.message + ']'; }
-    } else if (isExcel) {
-      try {
-        const XLSX = require('xlsx');
-        const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-        textContent = wb.SheetNames.map(function(name) {
-          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name]);
-          return 'Sheet: ' + name + '\n' + csv;
-        }).join('\n\n').slice(0, 12000);
-      } catch(e) { textContent = '[Could not parse Excel: ' + e.message + ']'; }
-    } else {
-      textContent = req.file.buffer.toString('utf8', 0, 12000);
-    }
+    if (isPdf) { textContent = extractPdfText(req.file.buffer); }
+    else if (isExcel) { textContent = extractExcelText(req.file.buffer); }
+    else { textContent = req.file.buffer.toString('utf8', 0, 12000); }
     return JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: promptText + '\n\nDOCUMENT CONTENT:\n' + textContent }],
       temperature: 0.1, max_tokens: 2048
     });
   }
-
   let groqPayload;
   try { groqPayload = await buildGroqPayload(); } catch(e) { return res.status(500).json({ error: 'File processing error: ' + e.message }); }
   const https = require('https');
