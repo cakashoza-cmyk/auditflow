@@ -668,7 +668,7 @@ function ForgotPassword({onBack}){
   const[msg,setMsg]=useState('');
   const[err,setErr]=useState('');
   async function sendOtp(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('OTP sent to '+email);setStep('otp');}
-  async function resetPwd(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,otp,newPassword:newPwd})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('Password reset\! Please login.');setStep('done');}
+  async function resetPwd(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,otp,newPassword:newPwd})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('Password reset! Please login.');setStep('done');}
   if(step==='done')return<div style={{textAlign:'center'}}><div style={{color:'#16a34a',marginBottom:12}}>{msg}</div><button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} onClick={onBack}>Back to Login</button></div>;
   return<div>
     <h3 style={{textAlign:'center',marginBottom:16,color:'#1e293b'}}>Reset Password</h3>
@@ -715,12 +715,12 @@ function CAPublicProfilePage({icaiNo}){
   const[data,setData]=useState(null);
   const[err,setErr]=useState('');
   useEffect(()=>{
-    if(\!icaiNo){setErr('No ICAI number set. Go to My Profile and add your ICAI Membership No. first.');return;}
+    if(!icaiNo){setErr('No ICAI number set. Go to My Profile and add your ICAI Membership No. first.');return;}
     API.get('/api/profile/ca/'+icaiNo).then(d=>{if(d.error)setErr(d.error);else setData(d);});
   },[icaiNo]);
   const appUrl=window.location.origin;
   if(err)return(<div className="page"><div className="card" style={{textAlign:'center',padding:32}}><div style={{fontSize:32,marginBottom:12}}>🌟</div><div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Public Profile</div><div style={{color:'var(--red)',marginBottom:16}}>{err}</div></div></div>);
-  if(\!data)return(<div className="page"><div className="card" style={{textAlign:'center',padding:32,color:'var(--gray)'}}>Loading profile…</div></div>);
+  if(!data)return(<div className="page"><div className="card" style={{textAlign:'center',padding:32,color:'var(--gray)'}}>Loading profile…</div></div>);
   const stars=data.avg_rating?'★'.repeat(Math.round(data.avg_rating))+'☆'.repeat(5-Math.round(data.avg_rating)):'';
   return(<div className="page">
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
@@ -736,12 +736,12 @@ function CAPublicProfilePage({icaiNo}){
         <div style={{flex:1}}>
           <div style={{fontSize:22,fontWeight:800,marginBottom:4}}>{data.name}</div>
           <div style={{fontSize:14,color:'#94a3b8',marginBottom:8}}>{data.firm_name||''}{data.city?' · '+data.city:''}</div>
-          {data.avg_rating?<div style={{fontSize:18,color:'#fbbf24'}}>{stars} <span style={{fontSize:13,color:'#94a3b8',marginLeft:4}}>{data.avg_rating}/5 ({data.rating_count} ratings)</span></div>:<div style={{fontSize:13,color:'#64748b'}}>No ratings yet — complete your first audit to earn one\!</div>}
+          {data.avg_rating?<div style={{fontSize:18,color:'#fbbf24'}}>{stars} <span style={{fontSize:13,color:'#94a3b8',marginLeft:4}}>{data.avg_rating}/5 ({data.rating_count} ratings)</span></div>:<div style={{fontSize:13,color:'#64748b'}}>No ratings yet — complete your first audit to earn one!</div>}
         </div>
       </div>
     </div>
-    {\!data.completed_audits&&<div className="card" style={{background:'var(--blue-l)',border:'1px solid var(--blue-m)',marginBottom:16,padding:18}}>
-      <div style={{fontWeight:700,color:'var(--blue)',marginBottom:6}}>🚀 Your profile is live\!</div>
+    {!data.completed_audits&&<div className="card" style={{background:'var(--blue-l)',border:'1px solid var(--blue-m)',marginBottom:16,padding:18}}>
+      <div style={{fontWeight:700,color:'var(--blue)',marginBottom:6}}>🚀 Your profile is live!</div>
       <div style={{fontSize:13,color:'var(--gray)',lineHeight:1.7}}>Complete your first audit assignment to build stats, ratings, and showcase your work. Banks discover CAs through AuditFlow — a strong profile means more assignments.</div>
     </div>}
     <div className="sg" style={{gridTemplateColumns:'repeat(3,1fr)'}}>
@@ -756,9 +756,6 @@ function CAPublicProfilePage({icaiNo}){
   </div>);
 }
 
-// ── AUTH CONTEXT ──────────────────────────────────────────────────────────────
-const AuthCtx = React.createContext({});
-
 // ── APP ───────────────────────────────────────────────────────────────────────
 function App(){
   const[user,setUser]=useState(null);
@@ -767,12 +764,12 @@ function App(){
   const[showReferral,setShowReferral]=useState(false);
   useEffect(()=>{
     const t=localStorage.getItem('af_token');
-    if(t) API.get('/api/auth/me').then(u=>{if(\!u.error)setUser(u);});
+    if(t) API.get('/api/auth/me').then(u=>{if(!u.error)setUser(u);});
   },[]);
 
   function logout(){localStorage.removeItem('af_token');setUser(null);setPage('dashboard');}
 
-  if(\!user) return <AuthCtx.Provider value={{}}><AuthScreen onLogin={u=>{setUser(u);}}/></AuthCtx.Provider>;
+  if(!user) return <AuthCtx.Provider value={{}}><AuthScreen onLogin={u=>{setUser(u);}}/></AuthCtx.Provider>;
 
   const NAV_BANKER=[
     {s:'Work',items:[{key:'dashboard',icon:'📊',label:'Dashboard'},{key:'audits',icon:'📋',label:'All Audits'},{key:'new-audit',icon:'➕',label:'Initiate Audit'}]},
@@ -824,7 +821,7 @@ function App(){
             </React.Fragment>))}
             {user.role==='ca'&&<div style={{margin:'12px 18px 0',padding:12,background:'#0f172a',borderRadius:8,border:'1px solid #334155'}}>
               <div style={{fontSize:11,color:'#fbbf24',fontWeight:700,marginBottom:4}}>💡 Refer & Grow</div>
-              <div style={{fontSize:11,color:'#94a3b8',lineHeight:1.6}}>Refer banks or CAs. When banks join, you get discovered. Audits rotate every 3 yrs — more banks = more recurring work\!</div>
+              <div style={{fontSize:11,color:'#94a3b8',lineHeight:1.6}}>Refer banks or CAs. When banks join, you get discovered. Audits rotate every 3 yrs — more banks = more recurring work!</div>
               <button className="btn btn-p btn-sm" style={{marginTop:8,width:'100%',justifyContent:'center',fontSize:11}} onClick={()=>setShowReferral(true)}>📨 Invite Now</button>
             </div>}
           </nav>
