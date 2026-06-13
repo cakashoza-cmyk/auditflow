@@ -8,7 +8,7 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const nodemailer = require('nodemailer');
+const https = require('https');
 
 const app        = express();
 const PORT       = process.env.PORT || 3000;
@@ -104,29 +104,48 @@ function defaultDocs(auditId) {
 }
 
 // ── EMAIL ───────────────────────────────────────────────────────────────
-function getTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-  const host = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  return nodemailer.createTransport({
-    host, port, secure: false,
-    auth: { user, pass }
+function sendBrevoEmail({ to, toName, subject, body }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const senderEmail = process.env.SMTP_USER || 'cakashoza@gmail.com';
+  if (!apiKey) { console.log('  EMAIL SKIPPED (no BREVO_API_KEY)'); return; }
+  const payload = JSON.stringify({
+    sender: { name: 'AuditFlow', email: senderEmail },
+    to: [{ email: to, name: toName || to }],
+    subject: subject,
+    textContent: body
   });
+  const options = {
+    hostname: 'api.brevo.com',
+    path: '/v3/smtp/email',
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': apiKey,
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(payload)
+    }
+  };
+  const req = https.request(options, function(res) {
+    let data = '';
+    res.on('data', function(chunk) { data += chunk; });
+    res.on('end', function() {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        console.log('  EMAIL SENT -> ' + to);
+      } else {
+        console.error('  EMAIL FAILED (' + res.statusCode + '): ' + data);
+      }
+    });
+  });
+  req.on('error', function(err) { console.error('  EMAIL ERROR: ' + err.message); });
+  req.write(payload);
+  req.end();
 }
 
 function sendEmail({ to, toName, subject, body, type }) {
   const notif = dbInsert('notifications', { to_email:to, to_name:toName, subject, body, type,
     sent_at: new Date().toISOString(), status:'sent' });
   console.log('  EMAIL -> ' + to + ' | ' + subject);
-  const transporter = getTransporter();
-  if (transporter) {
-    transporter.sendMail({
-      from: '"AuditFlow" <' + process.env.SMTP_USER + '>',
-      to, subject, text: body
-    }).catch(err => console.error('Email error:', err.message));
-  }
+  sendBrevoEmail({ to, toName, subject, body });
   return notif;
 }
 
