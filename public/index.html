@@ -3,19 +3,6 @@
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AuditFlow v2</title>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  var root = document.getElementById('root');
-  if (root && \!root.hasChildNodes()) {
-    root.innerHTML = '<div style="padding:40px;font-family:sans-serif;color:#333"><h2>Loading AuditFlow...</h2><p id="status">Initializing React...</p></div>';
-  }
-});
-window.onerror = function(msg, src, line, col, err) {
-  var root = document.getElementById('root');
-  if (root) root.innerHTML = '<div style="padding:40px;font-family:monospace;background:#fee2e2"><h2 style="color:#dc2626">JavaScript Error</h2><p><b>Message:</b> ' + msg + '</p><p><b>Source:</b> ' + src + '</p><p><b>Line:</b> ' + line + '</p><p><b>Error:</b> ' + (err ? err.stack : 'none') + '</p></div>';
-  return false;
-};
-</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -131,7 +118,7 @@ table.rpt-tbl input{padding:5px 7px;font-size:12.5px}
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-presets="react">
+<script type="text/babel">
 const { useState, useEffect, useCallback, createContext, useContext } = React;
 
 const API = {
@@ -292,21 +279,6 @@ function ReportForm({audit,onClose,onRefresh}){
     if(finalize){onRefresh();setTimeout(()=>{setMsg('');onClose();},1500);}
     else setTimeout(()=>setMsg(''),2500);
   }
-  const[aiLoading,setAiLoading]=useState(null);
-  const[aiMsgs,setAiMsgs]=useState({});
-  const[docTypes,setDocTypes]=useState([]);
-  const[showAI,setShowAI]=useState(false);
-  useEffect(()=>{if(!readOnly)API.get('/api/ai-doc-types').then(setDocTypes);},[readOnly]);
-  async function runAI(file,docKey){
-    setAiLoading(docKey);setAiMsgs(p=>({...p,[docKey]:''}));
-    const fd=new FormData();fd.append('file',file);fd.append('doc_type',docKey);
-    const r=await fetch(`/api/audits/${audit.id}/ai-analyze`,{method:'POST',headers:{Authorization:`Bearer ${API.token()}`},body:fd}).then(x=>x.json());
-    setAiLoading(null);
-    if(r.error){setAiMsgs(p=>({...p,[docKey]:'❌ '+r.error}));return;}
-    const filled=Object.entries(r.data).filter(([,v])=>v!==null&&v!==undefined);
-    setData(p=>({...p,...Object.fromEntries(filled)}));
-    setAiMsgs(p=>({...p,[docKey]:'✅ '+filled.length+' fields filled'}));
-  }
   if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading…</div>;
   const SROWS=['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'];
   const DROWS=['< 30 days','30–60 days','60–90 days','90–180 days','> 180 days'];
@@ -324,30 +296,6 @@ function ReportForm({audit,onClose,onRefresh}){
       </div>
       {msg&&<div className={`alert ${msg.includes('finalized')?'alert-g':'alert-b'}`}>{msg}</div>}
       {dpAlert&&<div className="alert alert-r">⚠ {dpAlert}</div>}
-      {!readOnly&&<div style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)',borderRadius:12,marginBottom:20,overflow:'hidden'}}>
-        <div style={{padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>setShowAI(p=>!p)}>
-          <div><div style={{color:'#fff',fontWeight:800,fontSize:14}}>🤖 AI Document Analysis</div><div style={{color:'#94a3b8',fontSize:12,marginTop:2}}>Upload audit documents — Gemini AI reads each and pre-fills the report automatically</div></div>
-          <span style={{color:'#60a5fa',fontSize:20}}>{showAI?'▲':'▼'}</span>
-        </div>
-        {showAI&&<div style={{padding:'0 20px 16px'}}>
-          {docTypes.map(dt=>(
-            <div key={dt.key} style={{background:'rgba(255,255,255,.07)',borderRadius:10,padding:'12px 14px',marginBottom:10}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10}}>
-                <div style={{flex:1}}>
-                  <div style={{color:'#e2e8f0',fontWeight:700,fontSize:13}}>{dt.label}</div>
-                  <div style={{color:'#94a3b8',fontSize:11.5,marginTop:3,lineHeight:1.5}}>{dt.desc}</div>
-                  {aiMsgs[dt.key]&&<div style={{fontSize:12,marginTop:6,color:aiMsgs[dt.key].startsWith('✅')?'#86efac':'#fca5a5'}}>{aiMsgs[dt.key]}</div>}
-                </div>
-                <label style={{background:aiLoading===dt.key?'#374151':'#2563eb',color:'#fff',borderRadius:8,padding:'7px 14px',fontWeight:700,fontSize:12,cursor:aiLoading?'default':'pointer',whiteSpace:'nowrap',flexShrink:0}}>
-                  {aiLoading===dt.key?'⏳ Reading…':'⚡ Upload & Read'}
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" style={{display:'none'}} disabled={!!aiLoading} onChange={e=>e.target.files[0]&&runAI(e.target.files[0],dt.key)}/>
-                </label>
-              </div>
-            </div>
-          ))}
-          <div style={{fontSize:11,color:'#64748b',marginTop:4}}>Supported: PDF, JPG, PNG. Max 20MB per file. AI fills fields — always review before finalizing.</div>
-        </div>}
-      </div>}
       <div className="rpt-section"><div className="rpt-sh">Section 1 — Borrower & Facility Details</div><div className="rpt-body">
         <div className="fg2"><div className="fg"><label>Borrower Name</label><input value={data.borrower_name||audit.borrower_name||''} onChange={e=>set('borrower_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Constitution</label><select value={data.constitution||audit.constitution||''} onChange={e=>set('constitution',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div></div>
         <div className="fg"><label>Address</label><input value={data.address||''} onChange={e=>set('address',e.target.value)} disabled={readOnly}/></div>
@@ -446,7 +394,7 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
       {tab==='workflow'&&<div>
         <Stepper stage={audit.stage}/>
         <div style={{display:'flex',gap:8,margin:'14px 0',flexWrap:'wrap'}}>
-          {canAdvance&&audit.stage!=='finalized'&&<button className="btn btn-p" onClick={advance} disabled={advancing} style={{flex:1,justifyContent:'center'}}>{advancing?'…':`→ ${(STAGES[(SI[audit.stage]||0)+1]||{label:'Next'}).label}`}</button>}
+          {canAdvance&&audit.stage!=='finalized'&&<button className="btn btn-p" onClick={advance} disabled={advancing} style={{flex:1,justifyContent:'center'}}>{advancing?'…':`→ ${(STAGES[(SI[audit.stage]||0)+1]||{label:"Next"}).label}`}</button>}
           {(user.role==='ca'||user.role==='admin')&&<button className="btn btn-o" onClick={()=>setShowReport(true)} style={{flex:1,justifyContent:'center'}}>📝 {(audit.report&&audit.report.status)==='finalized'?'View Report':'Fill RBI Report'}</button>}
           {user.role==='banker'&&<><button className="btn btn-o btn-sm" onClick={()=>setShowRemind(true)}>📤 Remind</button>{audit.report&&<button className="btn btn-o btn-sm" onClick={()=>setShowReport(true)}>📄 Report</button>}{audit.stage==='finalized'&&!audit.ca_rating&&<button className="btn btn-sm" style={{background:'#fef9c3',color:'#854d0e',border:'1.5px solid #fde047',borderRadius:7,fontWeight:600,cursor:'pointer',padding:'6px 12px'}} onClick={()=>setShowRate(true)}>⭐ Rate CA</button>}{audit.ca_rating&&<span style={{fontSize:12,color:'#f59e0b',fontWeight:700}}>{'★'.repeat(audit.ca_rating)} {audit.ca_rating}/5</span>}{['initiated','docs_requested'].includes(audit.stage)&&<button className="btn btn-xs" style={{background:'#fee2e2',color:'#dc2626',border:'none',cursor:'pointer',padding:'6px 12px',borderRadius:7,fontWeight:600}} onClick={cancelAudit} disabled={cancelling}>{cancelling?'Cancelling…':'🗑 Cancel Audit'}</button>}</>}
         </div>
@@ -681,7 +629,7 @@ function ForgotPassword({onBack}){
   const[msg,setMsg]=useState('');
   const[err,setErr]=useState('');
   async function sendOtp(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('OTP sent to '+email);setStep('otp');}
-  async function resetPwd(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,otp,newPassword:newPwd})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('Password reset! Please login.');setStep('done');}
+  async function resetPwd(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,otp,newPassword:newPwd})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('Password reset\! Please login.');setStep('done');}
   if(step==='done')return<div style={{textAlign:'center'}}><div style={{color:'#16a34a',marginBottom:12}}>{msg}</div><button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} onClick={onBack}>Back to Login</button></div>;
   return<div>
     <h3 style={{textAlign:'center',marginBottom:16,color:'#1e293b'}}>Reset Password</h3>
@@ -704,175 +652,120 @@ function AuthScreen({onLogin}){
     <div className="auth-logo">⚡ AuditFlow</div>
     <div style={{fontSize:13,color:'var(--gray)',marginBottom:20}}>Stock Audit Platform — CAs · Banks · Borrowers</div>
     <div className="role-tabs">{[['ca','CA'],['banker','Banker'],['borrower','Borrower']].map(([r,l])=><div key={r} className={`role-tab ${role===r?'active':''}`} onClick={()=>{setRole(r);setErr('');}}>{l}</div>)}</div>
-        {err&&<div className="alert alert-r" style={{marginBottom:8}}>{err}</div>}
-    {mode==='forgot'?<ForgotPassword onBack={()=>setMode('login')}/>:<>
-    {mode==='register'&&<div className="fg"><label>Select Role</label><div className="role-tabs">{[['ca','Chartered Accountant'],['banker','Banker'],['borrower','Borrower/Borrower']].map(([r,l])=><div key={r} className={`role-tab ${role===r?'active':''}`} onClick={()=>setRole(r)}>{l}</div>)}</div></div>}
+    {err&&<div className="alert alert-r" style={{marginBottom:12}}>{err}</div>}
     <form onSubmit={submit}>
-      {mode==='register'&&<div className="fg2"><div className="fg"><label>Full Name</label><input className="inp" value={form.name} onChange={e=>set('name',e.target.value)} required/></div><div className="fg"><label>Phone</label><input className="inp" value={form.phone} onChange={e=>set('phone',e.target.value)}/></div></div>}
-      <div className="fg"><label>Email</label><input className="inp" type="email" value={form.email} onChange={e=>set('email',e.target.value)} required/></div>
-      <div className="fg"><label>Password</label><input className="inp" type="password" value={form.password} onChange={e=>set('password',e.target.value)} required/></div>
-      {mode==='register'&&role==='ca'&&<><div className="fg2"><div className="fg"><label>ICAI No.</label><input className="inp" value={form.icai_no} onChange={e=>set('icai_no',e.target.value)}/></div><div className="fg"><label>Firm Reg. No.</label><input className="inp" value={form.firm_reg_no} onChange={e=>set('firm_reg_no',e.target.value)}/></div></div><div className="fg"><label>Firm Name</label><input className="inp" value={form.firm_name} onChange={e=>set('firm_name',e.target.value)}/></div></>}
-      {mode==='register'&&role==='banker'&&<div className="fg2"><div className="fg"><label>Bank Name</label><input className="inp" value={form.bank_name} onChange={e=>set('bank_name',e.target.value)}/></div><div className="fg"><label>Branch</label><input className="inp" value={form.branch} onChange={e=>set('branch',e.target.value)}/></div></div>}
-      {mode==='register'&&role==='borrower'&&<><div className="fg"><label>City</label><input className="inp" value={form.city} onChange={e=>set('city',e.target.value)}/></div><div className="fg2"><div className="fg"><label>GSTIN</label><input className="inp" value={form.gstin} onChange={e=>set('gstin',e.target.value)}/></div><div className="fg"><label>PAN</label><input className="inp" value={form.pan} onChange={e=>set('pan',e.target.value)}/></div></div></>}
-      <button className="btn btn-p" type="submit" style={{width:'100%',justifyContent:'center',marginTop:6}} disabled={loading}>{loading?'Please wait…':mode==='login'?'Login':'Create Account'}</button>
+      {mode==='register'&&<div className="fg"><label>Full Name</label><input value={form.name} onChange={e=>set('name',e.target.value)} required/></div>}
+      <div className="fg"><label>Email</label><input type="email" value={form.email} onChange={e=>set('email',e.target.value)} required placeholder="your@email.com"/></div>
+      <div className="fg"><label>Password</label><input type="password" value={form.password} onChange={e=>set('password',e.target.value)} required/></div>
+      {mode==='register'&&<>
+        <div className="fg2"><div className="fg"><label>Phone</label><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></div><div className="fg"><label>City</label><input value={form.city} onChange={e=>set('city',e.target.value)}/></div></div>
+        <div className="fg"><label>Full Address</label><input value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Street, Area, City, PIN"/></div>
+        {role==='ca'&&<><div className="fg2"><div className="fg"><label>ICAI Membership No.</label><input value={form.icai_no} onChange={e=>set('icai_no',e.target.value)} placeholder="Individual (e.g. 112847)"/></div><div className="fg"><label>Firm Reg. No. (FRN)</label><input value={form.firm_reg_no} onChange={e=>set('firm_reg_no',e.target.value)} placeholder="e.g. 123456W"/></div></div><div className="fg"><label>Firm Name</label><input value={form.firm_name} onChange={e=>set('firm_name',e.target.value)}/></div></>}
+        {role==='banker'&&<div className="fg2"><div className="fg"><label>Bank Name</label><input value={form.bank_name} onChange={e=>set('bank_name',e.target.value)}/></div><div className="fg"><label>Branch</label><input value={form.branch} onChange={e=>set('branch',e.target.value)}/></div></div>}
+        {role==='borrower'&&<div className="fg"><label>Constitution</label><select value={form.constitution} onChange={e=>set('constitution',e.target.value)}>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div>}
+      </>}
+      <button type="submit" className="btn btn-p" style={{width:'100%',justifyContent:'center',marginTop:8}} disabled={loading}>{loading?'Please wait…':mode==='login'?'Login →':'Create Account →'}</button>
     </form>
-    <div style={{textAlign:'center',marginTop:12,fontSize:13}}>
-      {mode==='login'?<><span style={{color:'var(--gray)'}}>No account? </span><span style={{color:'var(--blue)',cursor:'pointer'}} onClick={()=>{setMode('register');setErr('');}}>Register</span><span style={{color:'var(--gray)',margin:'0 8px'}}>·</span><span style={{color:'var(--blue)',cursor:'pointer'}} onClick={()=>{setMode('forgot');setErr('');}}>Forgot password?</span></>:<><span style={{color:'var(--gray)'}}>Have an account? </span><span style={{color:'var(--blue)',cursor:'pointer'}} onClick={()=>{setMode('login');setErr('');}}>Login</span></>}
+    <div style={{textAlign:'center',marginTop:14,fontSize:13,color:'var(--gray)'}}>
+      {mode==='login'?<>No account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('register');setErr('');}}>Register</span></>:<>Have account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('login');setErr('');}}>Login</span></>}
+      {mode==='login'&&<div style={{textAlign:'center',marginTop:8}}><span style={{color:'var(--blue)',cursor:'pointer',fontSize:13}} onClick={()=>setMode('forgot')}>Forgot password?</span></div>}
+      {mode==='forgot'&&<ForgotPassword onBack={()=>setMode('login')}/>}
     </div>
-    </>}
+    <div style={{marginTop:18,padding:'12px',background:'var(--blue-l)',borderRadius:8,fontSize:12,color:'var(--gray)'}}>
+      
+    </div>
   </div></div>);
 }
 
-// ── CA PUBLIC PROFILE PAGE (in-app view) ─────────────────────────────────────
-function CAPublicProfilePage({icaiNo}){
-  const[data,setData]=useState(null);
-  const[err,setErr]=useState('');
-  useEffect(()=>{
-    if(!icaiNo){setErr('No ICAI number set. Go to My Profile and add your ICAI Membership No. first.');return;}
-    API.get('/api/profile/ca/'+icaiNo).then(d=>{if(d.error)setErr(d.error);else setData(d);});
-  },[icaiNo]);
-  const appUrl=window.location.origin;
-  if(err)return(<div className="page"><div className="card" style={{textAlign:'center',padding:32}}><div style={{fontSize:32,marginBottom:12}}>🌟</div><div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Public Profile</div><div style={{color:'var(--red)',marginBottom:16}}>{err}</div></div></div>);
-  if(!data)return(<div className="page"><div className="card" style={{textAlign:'center',padding:32,color:'var(--gray)'}}>Loading profile…</div></div>);
-  const stars=data.avg_rating?'★'.repeat(Math.round(data.avg_rating))+'☆'.repeat(5-Math.round(data.avg_rating)):'';
+// ── CA PUBLIC PROFILE PAGE (in-app) ──────────────────────────────────────────
+function CAPublicProfilePage({user}){
+  const[profile,setProfile]=useState(null);
+  const appUrl=(window.location.origin);
+  const profileUrl=user.icai_no?`${appUrl}/profile/ca/${user.icai_no}`:null;
+  useEffect(()=>{if(user.icai_no)API.get(`/api/profile/ca/${user.icai_no}`).then(setProfile);},[user.icai_no]);
+  function copyLink(){if(profileUrl){navigator.clipboard.writeText(profileUrl);alert('Profile link copied! Share it with bankers to showcase your credentials.');}}
+  if(!user.icai_no)return(<div className="page"><div className="card" style={{padding:24,textAlign:'center'}}><div style={{fontSize:32,marginBottom:12}}>🌟</div><div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Complete Your Profile First</div><div style={{color:'var(--gray)',marginBottom:16}}>Add your ICAI Membership Number in Settings to activate your public profile.</div><button className="btn btn-p" onClick={()=>{}}>Go to Settings →</button></div></div>);
+  if(!profile)return(<div className="page"><div style={{color:'var(--gray)',padding:24}}>Loading your profile…</div></div>);
+  const stars=(n)=>n?'★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n)):'—';
   return(<div className="page">
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-      <div className="section-t">My Public Profile</div>
-      <div style={{display:'flex',gap:8}}>
-        <a href={appUrl+'/profile/ca/'+icaiNo} target="_blank" className="btn btn-o btn-sm">🔗 Share Profile</a>
-        <button className="btn btn-p btn-sm" onClick={()=>{navigator.clipboard.writeText(appUrl+'/profile/ca/'+icaiNo);}}>📋 Copy Link</button>
-      </div>
-    </div>
-    <div style={{background:'linear-gradient(135deg,#1e293b 0%,#0f172a 100%)',borderRadius:14,padding:28,color:'#fff',marginBottom:20}}>
-      <div style={{display:'flex',gap:18,alignItems:'flex-start'}}>
-        <div style={{width:64,height:64,borderRadius:'50%',background:'var(--blue)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:800,color:'#fff',flexShrink:0}}>{(data.name||'CA').split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:22,fontWeight:800,marginBottom:4}}>{data.name}</div>
-          <div style={{fontSize:14,color:'#94a3b8',marginBottom:8}}>{data.firm_name||''}{data.city?' · '+data.city:''}</div>
-          {data.avg_rating?<div style={{fontSize:18,color:'#fbbf24'}}>{stars} <span style={{fontSize:13,color:'#94a3b8',marginLeft:4}}>{data.avg_rating}/5 ({data.rating_count} ratings)</span></div>:<div style={{fontSize:13,color:'#64748b'}}>No ratings yet — complete your first audit to earn one!</div>}
+    <div className="card" style={{padding:0,overflow:'hidden',marginBottom:16}}>
+      <div style={{background:'linear-gradient(135deg,#1d4ed8,#3b82f6)',padding:'28px 24px',color:'#fff'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+          <div><div style={{fontWeight:800,fontSize:22,marginBottom:4}}>{profile.name}</div>
+            <div style={{fontSize:13,opacity:.85}}>{profile.firm_name||'Independent CA'} {profile.icai_no&&'· ICAI '+profile.icai_no}</div>
+            <div style={{fontSize:13,opacity:.85}}>{profile.city||''}</div>
+          </div>
+          {profile.avg_rating&&<div style={{background:'rgba(255,255,255,.2)',borderRadius:12,padding:'8px 16px',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800}}>★ {profile.avg_rating}</div><div style={{fontSize:11,opacity:.8}}>{profile.rating_count} ratings</div></div>}
         </div>
       </div>
+      <div style={{padding:24}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:12,marginBottom:24}}>
+          {[{v:profile.completed_audits||0,l:'Audits Completed'},{v:profile.total_audits||0,l:'Total Assigned'},{v:profile.avg_rating?stars(profile.avg_rating)+' '+profile.avg_rating+'/5':'No ratings',l:'Avg Rating'},{v:profile.total_exposure_cr?'₹'+profile.total_exposure_cr+'Cr':'—',l:'Exposure Audited'},{v:profile.on_time_rate!==null?profile.on_time_rate+'%':'—',l:'On-Time Rate'},{v:profile.banks_worked_with||0,l:'Banks Served'}].map(s=>(
+            <div key={s.l} style={{background:'#f8fafc',borderRadius:12,padding:14,textAlign:'center'}}>
+              <div style={{fontSize:20,fontWeight:800,color:'#1d4ed8'}}>{s.v}</div>
+              <div style={{fontSize:11,color:'var(--gray)',marginTop:2}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+        {(profile.top_sectors&&profile.top_sectors.length)>0&&<div style={{marginBottom:16}}><div style={{fontSize:12,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',marginBottom:8}}>Top Sectors</div>{profile.top_sectors.map(s=><span key={s} style={{display:'inline-block',background:'#eff6ff',color:'#1d4ed8',borderRadius:6,padding:'3px 10px',fontSize:12,fontWeight:600,marginRight:6,marginBottom:4}}>{s}</span>)}</div>}
+        {(profile.bank_names&&profile.bank_names.length)>0&&<div style={{marginBottom:16}}><div style={{fontSize:12,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',marginBottom:8}}>Banks Worked With</div>{profile.bank_names.map(b=><span key={b} style={{display:'inline-block',background:'#f0fdf4',color:'#16a34a',borderRadius:6,padding:'3px 10px',fontSize:12,fontWeight:600,marginRight:6,marginBottom:4}}>🏦 {b}</span>)}</div>}
+        {(profile.featured_assignments&&profile.featured_assignments.length)>0&&<div style={{marginBottom:16}}><div style={{fontSize:12,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',marginBottom:8}}>Featured Assignments</div>
+          {profile.featured_assignments.map((a,i)=><div key={i} style={{background:'#f8fafc',borderRadius:10,padding:'12px 14px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div><div style={{fontWeight:700,fontSize:13}}>{a.bank}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>{a.sector}{a.exposure?' · ₹'+Number(a.exposure).toLocaleString('en-IN')+' exposure':''}{a.year?' · '+a.year:''}</div></div>
+            {a.rating&&<span style={{color:'#f59e0b',fontWeight:700,fontSize:13}}>★ {a.rating}</span>}
+          </div>)}
+        </div>}
+      </div>
     </div>
-    {!data.completed_audits&&<div className="card" style={{background:'var(--blue-l)',border:'1px solid var(--blue-m)',marginBottom:16,padding:18}}>
-      <div style={{fontWeight:700,color:'var(--blue)',marginBottom:6}}>🚀 Your profile is live!</div>
-      <div style={{fontSize:13,color:'var(--gray)',lineHeight:1.7}}>Complete your first audit assignment to build stats, ratings, and showcase your work. Banks discover CAs through AuditFlow — a strong profile means more assignments.</div>
+    {profileUrl&&<div className="card" style={{padding:20}}>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:8}}>🔗 Your Shareable Profile Link</div>
+      <div style={{fontSize:12,color:'var(--gray)',marginBottom:12}}>Share this with bankers, on LinkedIn, or in your email signature. No login needed to view it.</div>
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{flex:1,background:'#f8fafc',border:'1.5px solid var(--gray-m)',borderRadius:8,padding:'8px 12px',fontSize:12,color:'var(--gray)',wordBreak:'break-all'}}>{profileUrl}</div>
+        <button className="btn btn-p btn-sm" onClick={copyLink}>📋 Copy Link</button>
+        <a href={profileUrl} target="_blank" className="btn btn-o btn-sm">👁 Preview</a>
+      </div>
+      <div style={{marginTop:12,fontSize:12,color:'var(--gray)'}}>💡 Your profile updates automatically as you complete more audits and receive ratings.</div>
     </div>}
-    <div className="sg" style={{gridTemplateColumns:'repeat(3,1fr)'}}>
-      {[[data.completed_audits||0,'Audits Completed','var(--blue)'],[data.total_audits||0,'Total Assigned','var(--purple)'],[data.banks_worked_with||0,'Banks Served','var(--green)']].map(([v,l,c])=>(<div key={l} className="sc" style={{borderColor:c}}><div className="sv" style={{color:c}}>{v}</div><div className="sl">{l}</div></div>))}
-    </div>
-    {data.top_sectors&&data.top_sectors.length>0&&<div className="card mb-4"><div style={{fontWeight:700,marginBottom:10}}>Top Sectors</div><div style={{display:'flex',flexWrap:'wrap',gap:6}}>{data.top_sectors.map(s=><span key={s} className="badge b-blue">{s}</span>)}</div></div>}
-    {data.featured_assignments&&data.featured_assignments.length>0&&<div className="card mb-4"><div style={{fontWeight:700,marginBottom:14}}>Featured Assignments</div>{data.featured_assignments.map((a,i)=>(<div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:i<data.featured_assignments.length-1?'1px solid var(--gray-m)':'none'}}><div><div style={{fontWeight:600,fontSize:13}}>{a.bank}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>{a.sector}{a.exposure?' · Rs.'+Number(a.exposure).toLocaleString('en-IN')+' exposure':''}{a.year?' · '+a.year:''}</div></div>{a.rating&&<div style={{color:'#d97706',fontWeight:700}}>★ {a.rating}</div>}</div>))}</div>}
-    <div className="card" style={{background:'#fafafa',border:'1px solid var(--gray-m)'}}>
-      <div style={{fontWeight:700,marginBottom:10,color:'var(--blue)'}}>💡 Why referrals matter for CAs</div>
-      <div style={{fontSize:13,color:'var(--gray)',lineHeight:1.8}}>Every bank you refer to AuditFlow means exposure to all their borrower audits. Since <strong>RBI mandates auditor rotation every 3 years</strong>, new banks = recurring assignments for registered CAs. Share your profile link and invite colleagues to grow the network.</div>
-    </div>
   </div>);
 }
 
-// ── APP ───────────────────────────────────────────────────────────────────────
-class ErrorBoundary extends React.Component {
-  constructor(props){super(props);this.state={error:null};}
-  static getDerivedStateFromError(e){return{error:e};}
-  render(){
-    if(this.state.error)return(<div style={{padding:40,fontFamily:'monospace',background:'#fee2e2',minHeight:'100vh'}}>
-      <h2 style={{color:'#dc2626',marginBottom:16}}>App Error (check browser console)</h2>
-      <pre style={{whiteSpace:'pre-wrap',fontSize:12}}>{String(this.state.error)}</pre>
-    </div>);
-    return this.props.children;
-  }
-}
+// ── APP SHELL ─────────────────────────────────────────────────────────────────
 function App(){
   const[user,setUser]=useState(null);
+  const[loading,setLoading]=useState(true);
   const[page,setPage]=useState('dashboard');
   const[panel,setPanel]=useState(null);
-  const[showReferral,setShowReferral]=useState(false);
-  useEffect(()=>{
-    const t=localStorage.getItem('af_token');
-    if(t) API.get('/api/auth/me').then(u=>{if(!u.error)setUser(u);});
-  },[]);
-
+  const[initiating,setInitiating]=useState(false);
+  useEffect(()=>{const t=localStorage.getItem('af_token');if(t){API.get('/api/auth/me').then(u=>{if((u&&u.id))setUser(u);setLoading(false);}).catch(()=>setLoading(false));}else setLoading(false);},[]);
   function logout(){localStorage.removeItem('af_token');setUser(null);setPage('dashboard');}
-
-  if(!user) return <AuthCtx.Provider value={{}}><AuthScreen onLogin={u=>{setUser(u);}}/></AuthCtx.Provider>;
-
-  const NAV_BANKER=[
-    {s:'Work',items:[{key:'dashboard',icon:'📊',label:'Dashboard'},{key:'audits',icon:'📋',label:'All Audits'},{key:'new-audit',icon:'➕',label:'Initiate Audit'}]},
-    {s:'Account',items:[{key:'invite',icon:'📨',label:'Invite Someone'},{key:'profile',icon:'👤',label:'My Profile'}]}
-    {s:'Account',items:[{key:'profile',icon:'👤',label:'My Profile'}]}
-  ];
-  const NAV_CA=[
-    {s:'Work',items:[{key:'dashboard',icon:'📊',label:'Dashboard'},{key:'audits',icon:'📋',label:'My Audits'},{key:'invoices',icon:'🧾',label:'Invoices'}]},
-    {s:'Grow',items:[{key:'ca-profile',icon:'🌟',label:'My Public Profile'},{key:'invite',icon:'📨',label:'Invite & Earn More'}]},
-    {s:'Account',items:[{key:'profile',icon:'👤',label:'My Profile'}]}
-  ];
-  const NAV_BORROWER=[
-    {s:'Work',items:[{key:'dashboard',icon:'📊',label:'Dashboard'},{key:'my-audits',icon:'📋',label:'My Audits'}]},
-    {s:'Account',items:[{key:'profile',icon:'👤',label:'My Profile'}]}
-  ];
-  const nav=user.role==='banker'?NAV_BANKER:user.role==='ca'?NAV_CA:NAV_BORROWER;
-
-  function renderPage(){
-    if(page==='dashboard'){
-      if(user.role==='banker')return <BankerPortfolio setPanel={setPanel}/>;
-      if(user.role==='ca')return <CADashboard setPanel={setPanel}/>;
-      return <BorrowerPortal setPanel={setPanel}/>;
-    }
-    if(page==='audits'){
-      if(user.role==='banker')return <BankerPortfolio setPanel={setPanel}/>;
-      return <CADashboard setPanel={setPanel}/>;
-    }
-    if(page==='invoices')return <CAInvoices/>;
-    if(page==='my-audits')return <BorrowerPortal setPanel={setPanel}/>;
-    if(page==='new-audit')return <InitiateAudit onDone={id=>{setPanel(id);setPage('dashboard');}}/>;
-    
-    if(page==='profile')return <ProfilePage/>;
-    if(page==='ca-profile')return <CAPublicProfilePage icaiNo={user.icai_no}/>;
-    if(page==='invite'){setTimeout(()=>setShowReferral(true),0);setPage('dashboard');return null;}
-    return <div className="page"><div className="card" style={{textAlign:'center',padding:32,color:'var(--gray)'}}>Page not found</div></div>;
-  }
-
-  return(
-    <AuthCtx.Provider value={{user,setUser}}>
-      {showReferral&&<ReferralModal onClose={()=>setShowReferral(false)}/>}
-      {panel&&<AuditPanel auditId={panel} onClose={()=>setPanel(null)}/>}
-      <div className="app">
-        <div className="sidebar">
-          <div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div>
-          <nav className="nav">
-            {nav.map(section=>(<React.Fragment key={section.s}>
-              <div className="ns">{section.s}</div>
-              {section.items.map(item=>(<div key={item.key} className={`ni${page===item.key?' active':''}`} onClick={()=>setPage(item.key)}><span className="ni-icon">{item.icon}</span>{item.label}</div>))}
-            </React.Fragment>))}
-            {user.role==='ca'&&<div style={{margin:'12px 18px 0',padding:12,background:'#0f172a',borderRadius:8,border:'1px solid #334155'}}>
-              <div style={{fontSize:11,color:'#fbbf24',fontWeight:700,marginBottom:4}}>💡 Refer & Grow</div>
-              <div style={{fontSize:11,color:'#94a3b8',lineHeight:1.6}}>Refer banks or CAs. When banks join, you get discovered. Audits rotate every 3 yrs — more banks = more recurring work!</div>
-              <button className="btn btn-p btn-sm" style={{marginTop:8,width:'100%',justifyContent:'center',fontSize:11}} onClick={()=>setShowReferral(true)}>📨 Invite Now</button>
-            </div>}
-          </nav>
-          <div className="sf">
-            <div style={{display:'flex',alignItems:'center',gap:9}}>
-              <div className="av">{initials(user.name)}</div>
-              <div style={{flex:1,minWidth:0}}><div style={{color:'#fff',fontSize:12.5,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{user.name}</div><div style={{color:'#64748b',fontSize:11}}>{user.role}</div></div>
-              <button className="btn-ghost" style={{color:'#94a3b8',fontSize:11,padding:'3px 6px'}} onClick={logout}>Out</button>
-            </div>
-          </div>
-        </div>
-        <div className="main">
-          <div className="topbar">
-            <div style={{fontWeight:700,fontSize:15}}>{user.role==='banker'?user.bank_name||'Banker Portal':user.role==='ca'?'CA Portal':'Borrower Portal'}</div>
-            <div style={{display:'flex',gap:8,alignItems:'center'}}>
-              {user.role==='ca'&&<button className="btn btn-o btn-sm" onClick={()=>setShowReferral(true)}>📨 Invite</button>}
-              <div className="av" style={{cursor:'pointer'}} onClick={()=>setPage('profile')}>{initials(user.name)}</div>
-            </div>
-          </div>
-          {renderPage()}
-        </div>
-      </div>
-    </AuthCtx.Provider>
-  );
+  if(loading)return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f0f4f8',color:'var(--gray)',fontSize:15}}>⚡ Loading AuditFlow…</div>;
+  if(!user)return<AuthCtx.Provider value={{user,setUser}}><AuthScreen onLogin={setUser}/></AuthCtx.Provider>;
+  const[showReferral,setShowReferral]=useState(false);
+  const isCA=user.role==='ca',isBanker=user.role==='banker',isBorrower=user.role==='borrower';
+  const nav=isCA?[{key:'dashboard',icon:'🏠',label:'Dashboard'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'invoices',icon:'🧾',label:'Invoices'},{key:'ca-profile',icon:'🌟',label:'My Public Profile'},{key:'profile',icon:'👤',label:'Settings'},{key:'invite',icon:'📨',label:'Invite Someone'}]:isBanker?[{key:'dashboard',icon:'🏠',label:'Portfolio'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'profile',icon:'👤',label:'Profile'},{key:'invite',icon:'📨',label:'Invite Someone'}]:[{key:'dashboard',icon:'🏠',label:'My Audits'},{key:'profile',icon:'👤',label:'Profile'},{key:'invite',icon:'📨',label:'Invite Someone'}];
+  if(initiating)return<AuthCtx.Provider value={{user,setUser}}><div className="app"><div className="sidebar"><div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div><nav className="nav">{nav.map(n=><div key={n.key} className="ni" onClick={()=>{setInitiating(false);setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav><div className="sf"><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av">{initials(user.name)}</div><div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#94a3b8',fontSize:11}}>{user.role.toUpperCase()}</div></div></div></div></div><div className="main"><div className="topbar"><div style={{fontWeight:700,color:'#374151'}}>Initiate Audit</div><button className="btn btn-o btn-sm" onClick={logout}>Logout</button></div><InitiateAudit onDone={(id)=>{setInitiating(false);setPage('dashboard');if(id)setPanel(id);}}/></div></div></AuthCtx.Provider>;
+  return(<AuthCtx.Provider value={{user,setUser}}><div className="app">
+    <div className="sidebar">
+      <div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div>
+      <nav className="nav">{nav.map(n=><div key={n.key} className={`ni ${page===n.key?'active':''}`} onClick={()=>{if(n.key==='initiate')setInitiating(true);else if(n.key==='invite'){setShowReferral(true);}else setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav>
+      <div className="sf"><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av">{initials(user.name)}</div><div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#94a3b8',fontSize:11}}>{user.role.toUpperCase()}</div></div></div></div>
+    </div>
+    <div className="main">
+      <div className="topbar"><div style={{fontWeight:700,color:'#374151'}}>{(nav.find(n=>n.key===page)||{label:'AuditFlow'}).label}</div><div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:12,color:'var(--gray)'}}>{user.email}</span><button className="btn btn-o btn-sm" onClick={logout}>Logout</button></div></div>
+      {page==='dashboard'&&isCA&&<CADashboard setPanel={setPanel}/>}
+      {page==='dashboard'&&isBanker&&<BankerPortfolio setPanel={setPanel}/>}
+      {page==='dashboard'&&isBorrower&&<BorrowerPortal setPanel={setPanel}/>}
+      {page==='invoices'&&isCA&&<CAInvoices/>}
+      {page==='profile'&&<ProfilePage/>}
+      {page==='ca-profile'&&isCA&&<CAPublicProfilePage user={user}/>}
+    </div>
+    {showReferral&&<ReferralModal onClose={()=>setShowReferral(false)}/>}
+    {panel&&<AuditPanel auditId={panel} onClose={()=>setPanel(null)} onRefresh={()=>{}}/>}
+  </div></AuthCtx.Provider>);
 }
-
-ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App/></ErrorBoundary>);
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
