@@ -470,6 +470,134 @@ app.post('/api/audits/:id/remind', auth(['banker','admin','ca']), function(req, 
   res.json({ ok:true, sent });
 });
 
+// ── AI STOCK ANALYSIS ────────────────────────────────────────────────────────
+const uploadAI = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20*1024*1024 } });
+
+app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('file'), async function(req, res) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI analysis not configured. Add ANTHROPIC_API_KEY in Railway Variables.' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Audit not found' });
+
+  const base64 = req.file.buffer.toString('base64');
+  const mediaType = req.file.mimetype || 'application/pdf';
+
+  const prompt = `You are an expert Indian Chartered Accountant analyzing a stock audit document for a bank's working capital facility.
+
+The borrower is: ${audit.borrower_name}
+Bank: ${audit.bank_name}, ${audit.branch||''}
+Constitution: ${audit.constitution||''}
+
+Extract ALL available information from this document and return ONLY a valid JSON object with these exact fields (use null for anything not found):
+
+{
+  "last_stock_date": "YYYY-MM-DD or null",
+  "sanctioned_limit": number_in_rupees_or_null,
+  "outstanding": number_in_rupees_or_null,
+  "dp_bank": number_in_rupees_or_null,
+  "dp_audit": number_in_rupees_or_null,
+  "audit_period": "e.g. April 2024 or null",
+  "address": "full address or null",
+  "gstin": "GSTIN or null",
+  "account_no": "account number or null",
+  "facility_type": "Cash Credit or Overdraft or WCDL or null",
+  "stocks": [
+    {"books": number_or_null, "physical": number_or_null, "diff": number_or_null, "remarks": "string or null"},
+    {"books": number_or_null, "physical": number_or_null, "diff": number_or_null, "remarks": "string or null"},
+    {"books": number_or_null, "physical": number_or_null, "diff": number_or_null, "remarks": "string or null"},
+    {"books": number_or_null, "physical": number_or_null, "diff": number_or_null, "remarks": "string or null"},
+    {"books": number_or_null, "physical": number_or_null, "diff": number_or_null, "remarks": "string or null"},
+    {"books": number_or_null, "physical": number_or_null, "diff": number_or_null, "remarks": "string or null"}
+  ],
+  "stock_good_pct": number_0_to_100_or_null,
+  "stock_slow_pct": number_0_to_100_or_null,
+  "stock_dead_pct": number_0_to_100_or_null,
+  "stock_observations": "detailed observations about stock quality, storage, discrepancies or null",
+  "total_debtors": number_or_null,
+  "dp_debtors": number_eligible_for_dp_or_null,
+  "debtors": [
+    {"amount": number_or_null, "pct": number_or_null, "remarks": "string or null"},
+    {"amount": number_or_null, "pct": number_or_null, "remarks": "string or null"},
+    {"amount": number_or_null, "pct": number_or_null, "remarks": "string or null"},
+    {"amount": number_or_null, "pct": number_or_null, "remarks": "string or null"},
+    {"amount": number_or_null, "pct": number_or_null, "remarks": "string or null"}
+  ],
+  "disputed_debtors": number_or_null,
+  "related_debtors": number_or_null,
+  "debtor_observations": "observations on debtor quality and aging or null",
+  "total_creditors": number_or_null,
+  "old_creditors": number_creditors_over_90_days_or_null,
+  "creditor_observations": "string or null",
+  "insurer": "insurer name or null",
+  "policy_no": "policy number or null",
+  "policy_expiry": "YYYY-MM-DD or null",
+  "sum_insured": number_or_null,
+  "coverage_type": "Fire or Burglary or All Risk or Marine or null",
+  "bank_mortgagee": "Yes or No or null",
+  "insurance_observations": "string or null",
+  "records_obs": "observations on books and accounting quality or null",
+  "ops_obs": "observations on business operations and activity or null",
+  "discrepancies": "key discrepancies found between books and physical or null",
+  "sanction_compliance": "Fully Compliant or Minor Deviations or Significant Deviations or Non-Compliant or null",
+  "recommendations": "recommendations to the bank or null",
+  "ai_summary": "2-3 sentence executive summary of the audit findings"
+}
+
+IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no code blocks. Pure JSON starting with { and ending with }.
+For the stocks array, index 0=Raw Materials, 1=WIP, 2=Finished Goods, 3=Stores & Spares, 4=Stock in Transit, 5=Total.
+For debtors array, index 0=<30 days, 1=30-60 days, 2=60-90 days, 3=90-180 days, 4=>180 days.
+All monetary values should be plain numbers in Indian Rupees (no commas, no ₹ symbol).`;
+
+  const payload = JSON.stringify({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 4096,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'document', source: { type: 'base64', media_type: mediaType, data: base64 } },
+        { type: 'text', text: prompt }
+      ]
+    }]
+  });
+
+  const options = {
+    hostname: 'api.anthropic.com',
+    path: '/v1/messages',
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'pdfs-2024-09-25',
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(payload)
+    }
+  };
+
+  const request = https.request(options, function(r) {
+    let data = '';
+    r.on('data', function(chunk) { data += chunk; });
+    r.on('end', function() {
+      try {
+        const resp = JSON.parse(data);
+        if (resp.error) return res.status(500).json({ error: 'AI error: ' + resp.error.message });
+        const text = resp.content?.[0]?.text || '';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return res.status(500).json({ error: 'AI returned unexpected format', raw: text.slice(0,200) });
+        const extracted = JSON.parse(jsonMatch[0]);
+        addTimeline(req.params.id, 'AI analysis completed — report fields pre-filled', req.user.name);
+        res.json({ ok: true, data: extracted });
+      } catch(e) {
+        res.status(500).json({ error: 'Failed to parse AI response: ' + e.message });
+      }
+    });
+  });
+  request.on('error', function(e) { res.status(500).json({ error: 'AI request failed: ' + e.message }); });
+  request.write(payload);
+  request.end();
+});
+
 // ── DOCUMENTS ────────────────────────────────────────────────────────────
 const upload = multer({
   storage: multer.diskStorage({

@@ -279,6 +279,17 @@ function ReportForm({audit,onClose,onRefresh}){
     if(finalize){onRefresh();setTimeout(()=>{setMsg('');onClose();},1500);}
     else setTimeout(()=>setMsg(''),2500);
   }
+  const[aiLoading,setAiLoading]=useState(false);
+  const[aiMsg,setAiMsg]=useState('');
+  async function runAI(file){
+    setAiLoading(true);setAiMsg('');
+    const fd=new FormData();fd.append('file',file);
+    const r=await fetch(`/api/audits/${audit.id}/ai-analyze`,{method:'POST',headers:{Authorization:`Bearer ${API.token()}`},body:fd}).then(x=>x.json());
+    setAiLoading(false);
+    if(r.error){setAiMsg('❌ '+r.error);return;}
+    setData(p=>({...p,...Object.fromEntries(Object.entries(r.data).filter(([,v])=>v!==null&&v!==undefined))}));
+    setAiMsg('✅ AI filled '+ Object.values(r.data).filter(v=>v!==null).length +' fields. Review and adjust before saving.');
+  }
   if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading…</div>;
   const SROWS=['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'];
   const DROWS=['< 30 days','30–60 days','60–90 days','90–180 days','> 180 days'];
@@ -296,6 +307,11 @@ function ReportForm({audit,onClose,onRefresh}){
       </div>
       {msg&&<div className={`alert ${msg.includes('finalized')?'alert-g':'alert-b'}`}>{msg}</div>}
       {dpAlert&&<div className="alert alert-r">⚠ {dpAlert}</div>}
+      {!readOnly&&<div style={{background:'linear-gradient(135deg,#1e293b,#1d4ed8)',borderRadius:12,padding:'16px 20px',marginBottom:20,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+        <div style={{flex:1}}><div style={{color:'#fff',fontWeight:700,fontSize:14,marginBottom:2}}>🤖 AI-Powered Analysis</div><div style={{color:'#94a3b8',fontSize:12}}>Upload the borrower's stock statement (PDF/image) and Claude AI will read it and pre-fill this entire report.</div></div>
+        <label style={{background:'#fff',color:'#1d4ed8',borderRadius:8,padding:'8px 16px',fontWeight:700,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>{aiLoading?'⏳ Analysing…':'⚡ Upload & Analyse'}<input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{display:'none'}} disabled={aiLoading} onChange={e=>e.target.files[0]&&runAI(e.target.files[0])}/></label>
+        {aiMsg&&<div style={{width:'100%',fontSize:12,color:aiMsg.startsWith('✅')?'#86efac':'#fca5a5',marginTop:4}}>{aiMsg}</div>}
+      </div>}
       <div className="rpt-section"><div className="rpt-sh">Section 1 — Borrower & Facility Details</div><div className="rpt-body">
         <div className="fg2"><div className="fg"><label>Borrower Name</label><input value={data.borrower_name||audit.borrower_name||''} onChange={e=>set('borrower_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Constitution</label><select value={data.constitution||audit.constitution||''} onChange={e=>set('constitution',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div></div>
         <div className="fg"><label>Address</label><input value={data.address||''} onChange={e=>set('address',e.target.value)} disabled={readOnly}/></div>
