@@ -270,6 +270,24 @@ function ReportForm({audit,onClose,onRefresh}){
   function set(k,v){setData(p=>({...p,[k]:v}));}
   function setStock(row,col,val){const s=[...(data.stocks||Array(6).fill({}))];s[row]={...s[row],[col]:val};setData(p=>({...p,stocks:s}));}
   function setDebt(i,col,val){const d=[...(data.debtors||Array(5).fill({}))];d[i]={...d[i],[col]:val};setData(p=>({...p,debtors:d}));}
+  function calcDP(){
+    // Eligible stocks = rows 0-4 (exclude row 5=Total), good+slow only (exclude dead stock)
+    const s=data.stocks||[];
+    const eligibleStock=s.slice(0,5).reduce(function(sum,r){return sum+(parseFloat(r&&r.physical)||parseFloat(r&&r.books)||0);},0);
+    const deadPct=parseFloat(data.stock_dead_pct)||0;
+    const goodStock=eligibleStock*(1-deadPct/100);
+    // Eligible debtors = rows 0-2 (< 90 days)
+    const d=data.debtors||[];
+    const eligibleDebtors=(parseFloat(d[0]&&d[0].amount)||0)+(parseFloat(d[1]&&d[1].amount)||0)+(parseFloat(d[2]&&d[2].amount)||0);
+    // Creditors deducted
+    const creditors=parseFloat(data.total_creditors)||0;
+    // Standard 25% margin on stocks, 40% margin on debtors (typical bank norms)
+    const stockMargin=0.25,debtorMargin=0.40;
+    const dp=Math.max(0,(goodStock*(1-stockMargin))+(eligibleDebtors*(1-debtorMargin))-creditors);
+    const sanctioned=parseFloat(data.sanctioned_limit)||0;
+    return {dp:Math.round(dp), capped:sanctioned>0?Math.round(Math.min(dp,sanctioned)):Math.round(dp), goodStock:Math.round(goodStock), eligibleDebtors:Math.round(eligibleDebtors)};
+  }
+  const dpCalc=calcDP();
   async function save(finalize=false){
     setSaving(true);
     const r=await API.put(`/api/audits/${audit.id}/report`,{data,status:finalize?'finalized':'draft'});
@@ -334,6 +352,17 @@ function ReportForm({audit,onClose,onRefresh}){
         <div className="fg3"><div className="fg"><label>Bank</label><input value={data.bank_name||audit.bank_name||''} onChange={e=>set('bank_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Branch</label><input value={data.branch||audit.branch||''} onChange={e=>set('branch',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Account No.</label><input value={data.account_no||''} onChange={e=>set('account_no',e.target.value)} disabled={readOnly}/></div></div>
         <div className="fg3"><div className="fg"><label>Facility Type</label><select value={data.facility_type||''} onChange={e=>set('facility_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Cash Credit','Overdraft','WCDL','PCFC','Packing Credit'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Sanctioned Limit (₹)</label><input value={data.sanctioned_limit||''} onChange={e=>set('sanctioned_limit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Outstanding Balance (₹)</label><input value={data.outstanding||''} onChange={e=>set('outstanding',e.target.value)} disabled={readOnly} placeholder="Used for DP check"/></div></div>
         <div className="fg3"><div className="fg"><label>DP as per Bank (₹)</label><input value={data.dp_bank||''} onChange={e=>set('dp_bank',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>DP as per Audit (₹)</label><input value={data.dp_audit||''} onChange={e=>set('dp_audit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Audit Period</label><input value={data.audit_period||''} onChange={e=>set('audit_period',e.target.value)} disabled={readOnly} placeholder="e.g. April 2024"/></div></div>
+        {dpCalc.dp>0&&<div style={{background:'rgba(96,165,250,.1)',border:'1.5px solid var(--blue)',borderRadius:10,padding:'12px 16px',marginBottom:10}}>
+          <div style={{fontWeight:700,fontSize:13,color:'var(--blue)',marginBottom:6}}>Auto-Calculated Drawing Power</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,fontSize:12}}>
+            <div><div style={{color:'var(--gray)'}}>Eligible Stocks</div><div style={{fontWeight:700}}>\u20b9{dpCalc.goodStock.toLocaleString('en-IN')}</div></div>
+            <div><div style={{color:'var(--gray)'}}>&lt;90d Debtors</div><div style={{fontWeight:700}}>\u20b9{dpCalc.eligibleDebtors.toLocaleString('en-IN')}</div></div>
+            <div><div style={{color:'var(--gray)'}}>Gross DP (25%/40% margin)</div><div style={{fontWeight:700}}>\u20b9{dpCalc.dp.toLocaleString('en-IN')}</div></div>
+            <div><div style={{color:'var(--gray)'}}>DP (capped at limit)</div><div style={{fontWeight:700,color:dpCalc.capped<(parseFloat(data.outstanding)||0)?'var(--red)':'var(--green)'}}>\u20b9{dpCalc.capped.toLocaleString('en-IN')}</div></div>
+          </div>
+          {dpCalc.capped<(parseFloat(data.outstanding)||0)&&<div style={{marginTop:8,color:'var(--red)',fontSize:12,fontWeight:600}}>\u26a0 Inadequate DP \u2014 outstanding \u20b9{(parseFloat(data.outstanding)||0).toLocaleString('en-IN')} exceeds DP \u20b9{dpCalc.capped.toLocaleString('en-IN')}</div>}
+          {!readOnly&&<button type="button" style={{marginTop:8,fontSize:11,background:'var(--blue)',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',cursor:'pointer'}} onClick={()=>{set('dp_audit',String(dpCalc.capped));}}>Apply to DP as per Audit</button>}
+        </div>}
         <div className="fg2"><div className="fg"><label>Date of Last Stock Statement</label><input type="date" value={data.last_stock_date||''} onChange={e=>set('last_stock_date',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Date of Site Visit</label><input type="date" value={data.visit_date||''} onChange={e=>set('visit_date',e.target.value)} disabled={readOnly}/></div></div>
       </div></div>
       <div className="rpt-section"><div className="rpt-sh">Section 2 — Stock / Inventory Position</div><div className="rpt-body">

@@ -37,6 +37,7 @@ function loadDB() {
   return JSON.parse(JSON.stringify(EMPTY_DB));
 }
 function saveDB(db) { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
+function dbAll(table) { return loadDB()[table] || []; }
 
 function withDB(fn) {
   const db = loadDB(); const result = fn(db); saveDB(db); return result;
@@ -633,12 +634,12 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
         if (m) {
           try {
             const extracted = JSON.parse(m[0]);
-            const audits = dbAll('audits');
-            const aidx = audits.findIndex(a => a.id === req.params.id);
+            const _aiDb = loadDB();
+            const aidx = _aiDb.audits.findIndex(a => a.id === req.params.id);
             if (aidx !== -1) {
-              if (!audits[aidx].ai_results) audits[aidx].ai_results = {};
-              audits[aidx].ai_results[docType] = { result: extracted, analyzed_at: new Date().toISOString() };
-              saveDB();
+              if (!_aiDb.audits[aidx].ai_results) _aiDb.audits[aidx].ai_results = {};
+              _aiDb.audits[aidx].ai_results[docType] = { result: extracted, analyzed_at: new Date().toISOString() };
+              saveDB(_aiDb);
             }
             res.json({ ok: true, doc_type: docType, label: cfg.label, result: extracted });
           } catch(pe) { res.json({ ok: true, doc_type: docType, label: cfg.label, result: null, raw: content }); }
@@ -669,32 +670,189 @@ app.put('/api/audits/:id/report', auth(), function(req, res) {
   const existing = dbFindOne('reports', { audit_id: req.params.id });
 
   // DP check
-  const outstanding = parseFloat(data.outstanding_balance) || 0;
-  const dpAudit = parseFloat(data.dp_as_per_audit) || 0;
+  const outstanding = parseFloat(data.outstanding) || 0;
+  const dpAudit = parseFloat(data.dp_audit) || 0;
   const inadequate_dp = outstanding > 0 && dpAudit > 0 && dpAudit < outstanding;
 
   if (existing) {
-    const reports = dbAll('reports');
-    const idx = reports.findIndex(r => r.audit_id === req.params.id);
-    reports[idx] = { ...reports[idx], data, status, updated_at: new Date().toISOString() };
-    saveDB();
+    const _rDb = loadDB();
+    const idx = _rDb.reports.findIndex(r => r.audit_id === req.params.id);
+    _rDb.reports[idx] = { ..._rDb.reports[idx], data, status, updated_at: new Date().toISOString() };
+    saveDB(_rDb);
   } else {
     dbInsert('reports', { audit_id: req.params.id, data, status, created_at: new Date().toISOString() });
   }
 
   if (status === 'finalized') {
-    const audits = dbAll('audits');
-    const aidx = audits.findIndex(a => a.id === req.params.id);
+    const _fDb = loadDB();
+    const aidx = _fDb.audits.findIndex(a => a.id === req.params.id);
     if (aidx !== -1) {
-      audits[aidx].stage = 'finalized';
-      audits[aidx].inadequate_dp = inadequate_dp;
-      audits[aidx].dp_calculated = dpAudit;
-      addTimeline(audits[aidx], 'Report finalized and submitted to bank', req.user.name);
-      saveDB();
+      _fDb.audits[aidx].stage = 'finalized';
+      _fDb.audits[aidx].inadequate_dp = inadequate_dp;
+      _fDb.audits[aidx].dp_calculated = dpAudit;
+      saveDB(_fDb);
+      addTimeline(req.params.id, 'Report finalized and submitted to bank', req.user.name);
     }
   }
   res.json({ ok: true, inadequate_dp, dp_calculated: dpAudit });
 });
+
+// ── DRIVE LINK ────────────────────────────────────────────────────────────────
+app.put('/api/audits/:id/drive-link', auth(['ca','admin']), function(req, res) {
+  const { drive_link } = req.body;
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  dbUpdate('audits', { id: req.params.id }, { drive_link: drive_link || null });
+  addTimeline(req.params.id, drive_link ? 'Google Drive folder linked' : 'Drive link removed', req.user.name);
+  res.json({ ok: true });
+});
+
+// ── AA CONSENT ────────────────────────────────────────────────────────────────
+app.post('/api/audits/:id/consent', auth(['ca','banker','admin']), function(req, res) {
+  const { data_types } = req.body;
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  const consent = dbInsert('aa_consents', {
+    audit_id: req.params.id,
+    requested_by: req.user.id,
+    data_types: data_types || ['gst','itr','bank'],
+    status: 'pending',
+    requested_at: new Date().toISOString(),
+    approved_at: null
+  });
+  addTimeline(req.params.id, 'Account Aggregator consent requested from borrower', req.user.name);
+  const borrower = audit.borrower_id ? dbFindOne('users', { id: audit.borrower_id }) : null;
+  if (borrower) {
+    sendEmail({ to: borrower.email, toName: borrower.name,
+      subject: '[AuditFlow] Consent required for your stock audit (' + req.params.id + ')',
+      body: 'Dear ' + borrower.name + ',\n\nYour CA has requested consent to fetch your financial data (GST, ITR, Bank Statement) via the Account Aggregator framework for your stock audit.\n\nPlease log in to approve:\n' + (process.env.APP_URL || 'http://localhost:3000') + '\n\nAudit ID: ' + req.params.id + '\n\nRegards,\nAuditFlow',
+      type: 'aa_consent_request' });
+  }
+  res.json(consent);
+});
+
+app.put('/api/aa-consents/:id/approve', auth(['borrower']), function(req, res) {
+  const consent = dbFindOne('aa_consents', { id: parseInt(req.params.id) });
+  if (!consent) return res.status(404).json({ error: 'Not found' });
+  dbUpdate('aa_consents', { id: parseInt(req.params.id) }, { status: 'approved', approved_at: new Date().toISOString() });
+  addTimeline(consent.audit_id, 'Borrower approved Account Aggregator consent', req.user.name);
+  res.json({ ok: true });
+});
+
+// ── CA RATING ─────────────────────────────────────────────────────────────────
+app.post('/api/audits/:id/rate', auth(['banker','admin']), function(req, res) {
+  const { rating, comment } = req.body;
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1-5' });
+  dbUpdate('audits', { id: req.params.id }, { rating: parseInt(rating), rating_comment: comment || '', rated_by: req.user.id, rated_at: new Date().toISOString() });
+  addTimeline(req.params.id, 'CA rated ' + rating + '/5 by banker' + (comment ? ': "' + comment + '"' : ''), req.user.name);
+  // update CA average rating
+  if (audit.ca_id) {
+    const caAudits = dbFind('audits', {}).filter(function(a) { return a.ca_id == audit.ca_id && a.rating; });
+    const avg = caAudits.reduce(function(s, a) { return s + a.rating; }, 0) / caAudits.length;
+    dbUpdate('users', { id: audit.ca_id }, { avg_rating: Math.round(avg * 10) / 10, total_ratings: caAudits.length });
+  }
+  res.json({ ok: true });
+});
+
+// ── INVOICES ──────────────────────────────────────────────────────────────────
+app.post('/api/audits/:id/invoice', auth(['ca','admin']), function(req, res) {
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  if (dbFindOne('invoices', { audit_id: req.params.id })) return res.status(400).json({ error: 'Invoice already raised' });
+  const inv = dbInsert('invoices', {
+    audit_id: req.params.id,
+    ca_id: req.user.id,
+    amount: audit.fee || 0,
+    status: 'raised',
+    raised_at: new Date().toISOString(),
+    paid_at: null
+  });
+  dbUpdate('audits', { id: req.params.id }, { pay_status: 'raised' });
+  addTimeline(req.params.id, 'Invoice raised for ₹' + (audit.fee || 0), req.user.name);
+  const banker = audit.banker_id ? dbFindOne('users', { id: audit.banker_id }) : null;
+  if (banker) {
+    sendEmail({ to: banker.email, toName: banker.name,
+      subject: '[AuditFlow] Invoice raised: ' + audit.borrower_name + ' (₹' + (audit.fee || 0) + ')',
+      body: 'Dear ' + banker.name + ',\n\nAudit fee invoice has been raised for ' + audit.borrower_name + '.\nAmount: ₹' + (audit.fee || 0) + '\nAudit ID: ' + req.params.id + '\n\nPlease log in to mark as paid:\n' + (process.env.APP_URL || 'http://localhost:3000'),
+      type: 'invoice_raised' });
+  }
+  res.json(inv);
+});
+
+app.get('/api/invoices', auth(['ca','admin','banker']), function(req, res) {
+  const user = req.user;
+  let invoices = dbFind('invoices');
+  if (user.role === 'ca') invoices = invoices.filter(function(i) { return i.ca_id == user.id; });
+  if (user.role === 'banker') {
+    const myAuditIds = dbFind('audits', { banker_id: user.id }).map(function(a) { return a.id; });
+    invoices = invoices.filter(function(i) { return myAuditIds.includes(i.audit_id); });
+  }
+  invoices = invoices.map(function(inv) {
+    const audit = dbFindOne('audits', { id: inv.audit_id });
+    return Object.assign({}, inv, { audit: audit || null });
+  }).sort(function(a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+  res.json(invoices);
+});
+
+app.put('/api/invoices/:id/pay', auth(['banker','admin']), function(req, res) {
+  const inv = dbFindOne('invoices', { id: parseInt(req.params.id) });
+  if (!inv) return res.status(404).json({ error: 'Not found' });
+  dbUpdate('invoices', { id: parseInt(req.params.id) }, { status: 'paid', paid_at: new Date().toISOString() });
+  dbUpdate('audits', { id: inv.audit_id }, { pay_status: 'paid', pay_date: new Date().toISOString() });
+  addTimeline(inv.audit_id, 'Invoice marked as paid by banker', req.user.name);
+  const ca = dbFindOne('users', { id: inv.ca_id });
+  if (ca) {
+    sendEmail({ to: ca.email, toName: ca.name,
+      subject: '[AuditFlow] Payment confirmed: ₹' + inv.amount,
+      body: 'Dear ' + ca.name + ',\n\nPayment of ₹' + inv.amount + ' has been marked as received for audit ' + inv.audit_id + '.\n\nRegards,\nAuditFlow',
+      type: 'invoice_paid' });
+  }
+  res.json({ ok: true });
+});
+
+// ── ANALYTICS ─────────────────────────────────────────────────────────────────
+app.get('/api/analytics', auth(['ca','admin']), function(req, res) {
+  const uid = req.user.id;
+  const myAudits = dbFind('audits').filter(function(a) { return a.ca_id == uid; });
+  const total = myAudits.length;
+  const finalized = myAudits.filter(function(a) { return a.stage === 'finalized'; }).length;
+  const inProgress = total - finalized;
+  const totalFees = myAudits.reduce(function(s, a) { return s + (parseFloat(a.fee) || 0); }, 0);
+  const paidFees = myAudits.filter(function(a) { return a.pay_status === 'paid'; }).reduce(function(s, a) { return s + (parseFloat(a.fee) || 0); }, 0);
+  const overdue = myAudits.filter(function(a) { return a.deadline && new Date(a.deadline) < new Date() && a.stage !== 'finalized'; }).length;
+  const inadequateDp = myAudits.filter(function(a) { return a.inadequate_dp; }).length;
+  const user = dbFindOne('users', { id: uid });
+  res.json({ total, finalized, inProgress, overdue, totalFees, paidFees, inadequateDp, avg_rating: user && user.avg_rating || null, total_ratings: user && user.total_ratings || 0 });
+});
+
+// ── REFERRAL ──────────────────────────────────────────────────────────────────
+app.post('/api/refer', auth(), function(req, res) {
+  const { email, name } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const referrer = dbFindOne('users', { id: req.user.id });
+  sendEmail({ to: email, toName: name || email,
+    subject: referrer.name + ' invited you to AuditFlow',
+    body: 'Hi ' + (name || '') + ',\n\n' + referrer.name + ' thinks you\'d find AuditFlow useful — it\'s a platform that digitises stock audits for CAs and banks, replacing WhatsApp and spreadsheets with a proper workflow.\n\nSign up free:\n' + (process.env.APP_URL || 'http://localhost:3000') + '\n\nRegards,\nTeam AuditFlow',
+    type: 'referral' });
+  res.json({ ok: true });
+});
+
+// ── CA PUBLIC PROFILE ─────────────────────────────────────────────────────────
+app.get('/api/profile/ca/:icai_no', function(req, res) {
+  const ca = dbFind('users', { role: 'ca' }).find(function(u) { return u.icai_no === req.params.icai_no; });
+  if (!ca) return res.status(404).json({ error: 'CA not found' });
+  const myAudits = dbFind('audits').filter(function(a) { return a.ca_id == ca.id; });
+  res.json({
+    name: ca.name, icai_no: ca.icai_no, firm_name: ca.firm_name,
+    firm_reg_no: ca.firm_reg_no, city: ca.city, phone: ca.phone,
+    avg_rating: ca.avg_rating || null, total_ratings: ca.total_ratings || 0,
+    total_audits: myAudits.length,
+    finalized_audits: myAudits.filter(function(a) { return a.stage === 'finalized'; }).length
+  });
+});
+
 
 // ── CATCH-ALL (serve React SPA) ───────────────────────────────────────────────
 app.get('*', function(req, res) {
