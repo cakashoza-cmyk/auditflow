@@ -549,13 +549,18 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'AI not configured - add GROQ_API_KEY in Railway (free key at console.groq.com)' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const docType = req.body.doc_type;
   const cfg = AI_DOC_PROMPTS[docType];
+  if (!cfg) return res.status(400).json({ error: 'Invalid doc_type: ' + docType });
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Audit not found' });
+  const promptText = cfg.prompt(audit) + '\nRespond ONLY with a valid JSON object. No markdown, no code fences.';
   const base64Data = req.file.buffer.toString('base64');
   const mimeType = req.file.mimetype || 'image/jpeg';
   const groqPayload = JSON.stringify({
     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     messages: [{ role: 'user', content: [
-      { type: 'text', text: cfg.prompt + '\nRespond ONLY with a valid JSON object. No markdown.' },
+      { type: 'text', text: promptText },
       { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } }
     ]}],
     temperature: 0.1, max_tokens: 2048
