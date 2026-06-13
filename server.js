@@ -106,7 +106,7 @@ function defaultDocs(auditId) {
 // ── EMAIL ───────────────────────────────────────────────────────────────
 function sendBrevoEmail({ to, toName, subject, body }) {
   const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.SMTP_USER || 'cakashoza@gmail.com';
+  const senderEmail = process.env.SENDER_EMAIL || 'cakashoza@gmail.com';
   if (!apiKey) { console.log('  EMAIL SKIPPED (no BREVO_API_KEY)'); return; }
   const payload = JSON.stringify({
     sender: { name: 'AuditFlow', email: senderEmail },
