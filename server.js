@@ -596,6 +596,49 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
   groqReq.end();
 });
 
+
+// ── REPORT ───────────────────────────────────────────────────────────────────
+app.get('/api/audits/:id/report', auth(), function(req, res) {
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Audit not found' });
+  const report = dbFindOne('reports', { audit_id: req.params.id });
+  res.json({ data: (report && report.data) || {}, status: (report && report.status) || 'draft' });
+});
+
+app.put('/api/audits/:id/report', auth(), function(req, res) {
+  const audit = dbFindOne('audits', { id: req.params.id });
+  if (!audit) return res.status(404).json({ error: 'Audit not found' });
+  const { data, status } = req.body;
+  const existing = dbFindOne('reports', { audit_id: req.params.id });
+
+  // DP check
+  const outstanding = parseFloat(data.outstanding_balance) || 0;
+  const dpAudit = parseFloat(data.dp_as_per_audit) || 0;
+  const inadequate_dp = outstanding > 0 && dpAudit > 0 && dpAudit < outstanding;
+
+  if (existing) {
+    const reports = dbAll('reports');
+    const idx = reports.findIndex(r => r.audit_id === req.params.id);
+    reports[idx] = { ...reports[idx], data, status, updated_at: new Date().toISOString() };
+    saveDB();
+  } else {
+    dbInsert('reports', { audit_id: req.params.id, data, status, created_at: new Date().toISOString() });
+  }
+
+  if (status === 'finalized') {
+    const audits = dbAll('audits');
+    const aidx = audits.findIndex(a => a.id === req.params.id);
+    if (aidx !== -1) {
+      audits[aidx].stage = 'finalized';
+      audits[aidx].inadequate_dp = inadequate_dp;
+      audits[aidx].dp_calculated = dpAudit;
+      addTimeline(audits[aidx], 'Report finalized and submitted to bank', req.user.name);
+      saveDB();
+    }
+  }
+  res.json({ ok: true, inadequate_dp, dp_calculated: dpAudit });
+});
+
 // ── CATCH-ALL (serve React SPA) ───────────────────────────────────────────────
 app.get('*', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
