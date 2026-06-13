@@ -225,7 +225,7 @@ function RateModal({audit,onClose}){
   async function save(){setSaving(true);await API.post(`/api/audits/${audit.id}/rate`,{rating,comment});setSaving(false);setDone(true);setTimeout(onClose,1500);}
   return(<div className="remind-modal" onClick={onClose}><div className="remind-box" onClick={e=>e.stopPropagation()}>
     <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>Rate CA Performance</div>
-    <div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>{audit.(ca&&ca.name)} · {audit.borrower_name}</div>
+    <div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>{(audit.ca&&audit.ca.name)} · {audit.borrower_name}</div>
     {done?<div className="alert alert-g">✅ Rating saved! Thank you.</div>:<>
     <div className="fg"><label>Rating</label>
       <div style={{display:'flex',gap:8,marginTop:4}}>{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{fontSize:24,background:'none',border:'none',cursor:'pointer',opacity:n<=rating?1:0.3}}>★</button>)}</div>
@@ -267,7 +267,7 @@ function RemindModal({audit,onClose}){
   const[msg,setMsg]=useState('');
   const[sending,setSending]=useState(false);
   const[sent,setSent]=useState('');
-  async function send(){setSending(true);const r=await API.post(`/api/audits/${audit.id}/remind`,{target,message:msg});setSending(false);setSent(`Reminder sent to: ${r.(sent&&sent.join)(', ')||target}`);setTimeout(()=>onClose(),2000);}
+  async function send(){setSending(true);const r=await API.post(`/api/audits/${audit.id}/remind`,{target,message:msg});setSending(false);setSent(`Reminder sent to: ${(r.sent&&r.sent.join)(', ')||target}`);setTimeout(()=>onClose(),2000);}
   return(<div className="remind-modal" onClick={onClose}><div className="remind-box" onClick={e=>e.stopPropagation()}><div style={{fontWeight:800,fontSize:16,marginBottom:4}}>Send Reminder</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>{audit.borrower_name} · {audit.id}</div>{sent?<div className="alert alert-g">{sent}</div>:<><div className="fg"><label>Send To</label><select value={target} onChange={e=>setTarget(e.target.value)}><option value="both">CA + Borrower</option><option value="ca">CA Only</option><option value="borrower">Borrower Only</option></select></div><div className="fg"><label>Custom Message (optional)</label><textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Leave blank for auto-message based on current stage…"/></div><div style={{display:'flex',gap:8}}><button className="btn btn-p" onClick={send} disabled={sending}>{sending?'Sending…':'📤 Send Reminder'}</button><button className="btn btn-o" onClick={onClose}>Cancel</button></div></>}</div></div>);
 }
 
@@ -287,7 +287,7 @@ function ReportForm({audit,onClose,onRefresh}){
     setSaving(true);
     const r=await API.put(`/api/audits/${audit.id}/report`,{data,status:finalize?'finalized':'draft'});
     setSaving(false);
-    if(r.inadequate_dp)setDpAlert(`⚠ INADEQUATE DP: Calculated DP ₹${r.(dp_calculated&&dp_calculated.toLocaleString)('en-IN')} is less than outstanding balance. Bank will be alerted.`);
+    if(r.inadequate_dp)setDpAlert(`⚠ INADEQUATE DP: Calculated DP ₹${(r.dp_calculated&&r.dp_calculated.toLocaleString)('en-IN')} is less than outstanding balance. Bank will be alerted.`);
     setMsg(finalize?'Report finalized!':'Draft saved.');
     if(finalize){onRefresh();setTimeout(()=>{setMsg('');onClose();},1500);}
     else setTimeout(()=>setMsg(''),2500);
@@ -404,7 +404,7 @@ function InvoiceSection({audit,onRefresh}){
   async function raise(){setRaising(true);await API.post(`/api/audits/${audit.id}/invoice`,{});setRaising(false);onRefresh();}
   async function markPaid(){await API.put(`/api/invoices/${inv.id}/pay`,{});onRefresh();}
   if(!inv){if(user.role!=='ca')return<div style={{padding:20,textAlign:'center',color:'var(--gray)'}}>Invoice not raised yet.</div>;return(<div style={{textAlign:'center',padding:28}}><div style={{fontSize:32,marginBottom:8}}>🧾</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:14}}>No invoice raised yet.</div>{audit.fee>0?<button className="btn btn-p" onClick={raise} disabled={raising}>{raising?'Raising…':'+ Raise Invoice to Bank'}</button>:<div className="alert alert-a">Fee not set by bank yet.</div>}</div>);}
-  return(<div><div style={{border:'1.5px solid var(--gray-m)',borderRadius:9,padding:18,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}><div><div style={{fontSize:12,color:'var(--gray)',fontWeight:600}}>{inv.id}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>Raised: {fmtDate(inv.raised_at)}</div></div>{payBadge(inv.status)}</div>{[['Borrower',audit.borrower_name],['Bank',audit.bank_name],['Base Fee',`₹${inv.(amount&&amount.toLocaleString)('en-IN')}`],['GST 18%',`₹${inv.(gst&&gst.toLocaleString)('en-IN')}`]].map(([l,v])=><div key={l} className="ir"><span className="il">{l}</span><span className="iv">{v}</span></div>)}<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderTop:'2px solid var(--gray-m)',marginTop:8}}><span style={{fontWeight:700}}>Total</span><span style={{fontSize:20,fontWeight:800}}>₹{inv.(total&&total.toLocaleString)('en-IN')}</span></div></div>{inv.status==='paid'?<div className="alert alert-g">✅ Paid ₹{inv.(total&&total.toLocaleString)('en-IN')} on {fmtDate(inv.paid_at)}</div>:inv.status==='sent'&&user.role==='banker'?<div style={{display:'flex',gap:8}}><button className="btn btn-g" onClick={markPaid}>Mark as Paid</button><button className="btn btn-o">Send Reminder</button></div>:<div className="alert alert-a">⏳ Invoice sent. Awaiting payment.</div>}</div>);
+  return(<div><div style={{border:'1.5px solid var(--gray-m)',borderRadius:9,padding:18,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}><div><div style={{fontSize:12,color:'var(--gray)',fontWeight:600}}>{inv.id}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>Raised: {fmtDate(inv.raised_at)}</div></div>{payBadge(inv.status)}</div>{[['Borrower',audit.borrower_name],['Bank',audit.bank_name],['Base Fee',`₹${(inv.amount&&inv.amount.toLocaleString)('en-IN')}`],['GST 18%',`₹${(inv.gst&&inv.gst.toLocaleString)('en-IN')}`]].map(([l,v])=><div key={l} className="ir"><span className="il">{l}</span><span className="iv">{v}</span></div>)}<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderTop:'2px solid var(--gray-m)',marginTop:8}}><span style={{fontWeight:700}}>Total</span><span style={{fontSize:20,fontWeight:800}}>₹{(inv.total&&inv.total.toLocaleString)('en-IN')}</span></div></div>{inv.status==='paid'?<div className="alert alert-g">✅ Paid ₹{(inv.total&&inv.total.toLocaleString)('en-IN')} on {fmtDate(inv.paid_at)}</div>:inv.status==='sent'&&user.role==='banker'?<div style={{display:'flex',gap:8}}><button className="btn btn-g" onClick={markPaid}>Mark as Paid</button><button className="btn btn-o">Send Reminder</button></div>:<div className="alert alert-a">⏳ Invoice sent. Awaiting payment.</div>}</div>);
 }
 
 function AuditPanel({auditId,onClose,onRefresh:pr}){
@@ -433,11 +433,11 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
   const canAdvance=audit.stage!=='finalized'&&(user.role==='ca'||user.role==='banker'||user.role==='admin');
   const canUpload=user.role==='borrower'||user.role==='ca';
   if(showReport)return(<div style={{position:'fixed',inset:0,background:'#f0f4f8',zIndex:300,overflow:'auto',padding:24}}><ReportForm audit={audit} onClose={()=>setShowReport(false)} onRefresh={refresh}/></div>);
-  const tabs=[{key:'workflow',label:'📋 Workflow'},{key:'docs',label:`📁 Docs (${audit.(documents&&documents.length)||0})`},{key:'consent',label:'🔗 AA Consent'},{key:'invoice',label:'🧾 Invoice'}];
+  const tabs=[{key:'workflow',label:'📋 Workflow'},{key:'docs',label:`📁 Docs (${(audit.documents&&audit.documents.length)||0})`},{key:'consent',label:'🔗 AA Consent'},{key:'invoice',label:'🧾 Invoice'}];
   return(<><div className="overlay open" onClick={onClose}/><div className="dp open">{showRemind&&<RemindModal audit={audit} onClose={()=>setShowRemind(false)}/>}{showRate&&<RateModal audit={audit} onClose={()=>{setShowRate(false);load();}}/>}
     <div className="dph"><div><div style={{fontWeight:800,fontSize:15}}>{audit.borrower_name}</div><div style={{fontSize:11.5,color:'var(--gray)',marginTop:2}}>{audit.id} · {audit.bank_name}, {audit.branch}</div></div><button className="btn btn-o btn-sm" onClick={onClose}>✕</button></div>
     <div style={{padding:'12px 22px',borderBottom:'1px solid var(--gray-m)'}}>
-      {audit.inadequate_dp&&<div className="inadp-banner"><span style={{fontSize:20}}>⚠</span><div><div style={{fontWeight:700,fontSize:13,color:'var(--red)'}}>INADEQUATE DP</div><div style={{fontSize:12,color:'var(--red)'}}>DP ₹{audit.(dp_calculated&&dp_calculated.toLocaleString)('en-IN')} &lt; Outstanding</div></div></div>}
+      {audit.inadequate_dp&&<div className="inadp-banner"><span style={{fontSize:20}}>⚠</span><div><div style={{fontWeight:700,fontSize:13,color:'var(--red)'}}>INADEQUATE DP</div><div style={{fontSize:12,color:'var(--red)'}}>DP ₹{(audit.dp_calculated&&audit.dp_calculated.toLocaleString)('en-IN')} &lt; Outstanding</div></div></div>}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>{stageBadge(audit.stage)}<div style={{display:'flex',alignItems:'center',gap:8}}>{dl!==null&&<span style={{fontSize:11.5,fontWeight:600,color:dl<=3?'var(--red)':dl<=7?'var(--amber)':'var(--gray)'}}>{dl<=0?'⚠ OVERDUE':`${dl}d left`}</span>}<span style={{fontSize:11.5,color:'var(--gray)'}}>{pct}%</span></div></div>
       <div className="pb"><div className="pf" style={{width:`${pct}%`,background:pColor(pct)}}/></div>
     </div>
@@ -447,7 +447,7 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
         <Stepper stage={audit.stage}/>
         <div style={{display:'flex',gap:8,margin:'14px 0',flexWrap:'wrap'}}>
           {canAdvance&&audit.stage!=='finalized'&&<button className="btn btn-p" onClick={advance} disabled={advancing} style={{flex:1,justifyContent:'center'}}>{advancing?'…':`→ ${(STAGES[(SI[audit.stage]||0)+1]||{label:'Next'}).label}`}</button>}
-          {(user.role==='ca'||user.role==='admin')&&<button className="btn btn-o" onClick={()=>setShowReport(true)} style={{flex:1,justifyContent:'center'}}>📝 {audit.(report&&report.status)==='finalized'?'View Report':'Fill RBI Report'}</button>}
+          {(user.role==='ca'||user.role==='admin')&&<button className="btn btn-o" onClick={()=>setShowReport(true)} style={{flex:1,justifyContent:'center'}}>📝 {(audit.report&&audit.report.status)==='finalized'?'View Report':'Fill RBI Report'}</button>}
           {user.role==='banker'&&<><button className="btn btn-o btn-sm" onClick={()=>setShowRemind(true)}>📤 Remind</button>{audit.report&&<button className="btn btn-o btn-sm" onClick={()=>setShowReport(true)}>📄 Report</button>}{audit.stage==='finalized'&&!audit.ca_rating&&<button className="btn btn-sm" style={{background:'#fef9c3',color:'#854d0e',border:'1.5px solid #fde047',borderRadius:7,fontWeight:600,cursor:'pointer',padding:'6px 12px'}} onClick={()=>setShowRate(true)}>⭐ Rate CA</button>}{audit.ca_rating&&<span style={{fontSize:12,color:'#f59e0b',fontWeight:700}}>{'★'.repeat(audit.ca_rating)} {audit.ca_rating}/5</span>}{['initiated','docs_requested'].includes(audit.stage)&&<button className="btn btn-xs" style={{background:'#fee2e2',color:'#dc2626',border:'none',cursor:'pointer',padding:'6px 12px',borderRadius:7,fontWeight:600}} onClick={cancelAudit} disabled={cancelling}>{cancelling?'Cancelling…':'🗑 Cancel Audit'}</button>}</>}
         </div>
         <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Activity Timeline</div>
@@ -472,7 +472,7 @@ function AuditTable({audits,setPanel,showCA=false,showBanker=false}){
         return(<tr key={a.id} onClick={()=>setPanel(a.id)}>
           <td><div style={{fontWeight:700,color:'var(--blue)',fontSize:12,display:'flex',alignItems:'center',gap:5}}>{a.id}{a.inadequate_dp&&<span className="badge b-red btn-xs">⚠DP</span>}</div>{dl2!==null&&<div style={{fontSize:11,color:dl2<=0?'var(--red)':dl2<=3?'var(--red)':dl2<=7?'var(--amber)':'var(--gray)',marginTop:2}}>{dl2<=0?'⚠ Overdue':`${dl2}d left`}</div>}</td>
           <td><div style={{fontWeight:600}}>{a.borrower_name}</div><div style={{fontSize:11.5,color:'var(--gray)'}}>{a.constitution}·{a.city}</div></td>
-          {showCA&&<td style={{fontSize:13}}>{a.(ca&&ca.name)||<span style={{color:'var(--gray)'}}>Not assigned</span>}</td>}
+          {showCA&&<td style={{fontSize:13}}>{(a.ca&&a.ca.name)||<span style={{color:'var(--gray)'}}>Not assigned</span>}</td>}
           {showBanker&&<td style={{fontSize:13}}>{a.bank_name}</td>}
           <td style={{fontSize:13}}>{fmtDate(a.deadline)}</td>
           <td style={{minWidth:90}}><div style={{display:'flex',alignItems:'center',gap:6}}><div style={{flex:1}}><div className="pb"><div className="pf" style={{width:`${p}%`,background:p===100?'var(--green)':p>=60?'var(--blue)':'var(--amber)'}}/></div></div><span style={{fontSize:11,color:'var(--gray)'}}>{dc}/{dt}</span></div></td>
@@ -531,7 +531,7 @@ function CAInvoices(){
     </div>
     <div className="card" style={{padding:0,overflow:'hidden'}}>
       <table><thead><tr><th>Invoice #</th><th>Borrower</th><th>Bank</th><th>Fee</th><th>GST</th><th>Total</th><th>Status</th></tr></thead>
-      <tbody>{filtered.map(i=><tr key={i.id}><td style={{fontWeight:700,color:'var(--blue)',fontSize:12}}>{i.id}</td><td>{i.borrower_name}</td><td style={{fontSize:13}}>{i.bank_name}</td><td>₹{i.(amount&&amount.toLocaleString)('en-IN')}</td><td>₹{i.(gst&&gst.toLocaleString)('en-IN')}</td><td style={{fontWeight:700}}>₹{i.(total&&total.toLocaleString)('en-IN')}</td><td>{payBadge(i.status)}</td></tr>)}
+      <tbody>{filtered.map(i=><tr key={i.id}><td style={{fontWeight:700,color:'var(--blue)',fontSize:12}}>{i.id}</td><td>{i.borrower_name}</td><td style={{fontSize:13}}>{i.bank_name}</td><td>₹{(i.amount&&i.amount.toLocaleString)('en-IN')}</td><td>₹{(i.gst&&i.gst.toLocaleString)('en-IN')}</td><td style={{fontWeight:700}}>₹{(i.total&&i.total.toLocaleString)('en-IN')}</td><td>{payBadge(i.status)}</td></tr>)}
       {!filtered.length&&<tr><td colSpan={7} style={{textAlign:'center',color:'var(--gray)',padding:20}}>No invoices.</td></tr>}
       </tbody></table>
     </div>
@@ -667,7 +667,7 @@ function BorrowerPortal({setPanel}){
       {a.inadequate_dp&&<div className="inadp-banner" style={{marginBottom:10}}><span style={{fontSize:18}}>⚠</span><span style={{color:'var(--red)',fontWeight:700,fontSize:13}}>Inadequate DP reported by auditor — bank action pending</span></div>}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}><div><div style={{fontWeight:800,fontSize:15}}>{a.borrower_name}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>{a.id} · {a.bank_name}, {a.branch}</div></div>{stageBadge(a.stage)}</div>
       <div style={{marginBottom:10}}><div className="pb"><div className="pf" style={{width:`${stageProgress(a.stage)}%`,background:pColor(stageProgress(a.stage))}}/></div></div>
-      <div style={{display:'flex',gap:16,fontSize:12.5,color:'var(--gray)'}}><span>📅 {fmtDate(a.deadline)}</span><span>👤 {a.(ca&&ca.name)||'Not assigned'}</span>{a.(ca&&ca.icai_no)&&<span>M.No. {a.ca.icai_no}</span>}</div>
+      <div style={{display:'flex',gap:16,fontSize:12.5,color:'var(--gray)'}}><span>📅 {fmtDate(a.deadline)}</span><span>👤 {(a.ca&&a.ca.name)||'Not assigned'}</span>{(a.ca&&a.ca.icai_no)&&<span>M.No. {a.ca.icai_no}</span>}</div>
     </div>)}
   </div>);
 }
