@@ -531,6 +531,25 @@ function BorrowerPortal({setPanel}){
 }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
+function ForgotPassword({onBack}){
+  const[step,setStep]=useState('email');
+  const[email,setEmail]=useState('');
+  const[otp,setOtp]=useState('');
+  const[newPwd,setNewPwd]=useState('');
+  const[msg,setMsg]=useState('');
+  const[err,setErr]=useState('');
+  async function sendOtp(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('OTP sent to '+email);setStep('otp');}
+  async function resetPwd(e){e.preventDefault();setErr('');const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,otp,newPassword:newPwd})}).then(x=>x.json());if(r.error){setErr(r.error);return;}setMsg('Password reset\! Please login.');setStep('done');}
+  if(step==='done')return<div style={{textAlign:'center'}}><div style={{color:'#16a34a',marginBottom:12}}>{msg}</div><button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} onClick={onBack}>Back to Login</button></div>;
+  return<div>
+    <h3 style={{textAlign:'center',marginBottom:16,color:'#1e293b'}}>Reset Password</h3>
+    {msg&&<div style={{color:'#16a34a',marginBottom:8,fontSize:13}}>{msg}</div>}
+    {err&&<div style={{color:'#dc2626',marginBottom:8,fontSize:13}}>{err}</div>}
+    {step==='email'&&<form onSubmit={sendOtp}><input className="inp" placeholder="Your registered email" value={email} onChange={e=>setEmail(e.target.value)} required style={{width:'100%',marginBottom:8}}/><button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} type="submit">Send OTP</button></form>}
+    {step==='otp'&&<form onSubmit={resetPwd}><input className="inp" placeholder="Enter OTP from email" value={otp} onChange={e=>setOtp(e.target.value)} required style={{width:'100%',marginBottom:8}}/><input className="inp" type="password" placeholder="New password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} required style={{width:'100%',marginBottom:8}}/><button className="btn btn-p" style={{width:'100%',justifyContent:'center'}} type="submit">Reset Password</button></form>}
+    <div style={{textAlign:'center',marginTop:8}}><span style={{color:'var(--blue)',cursor:'pointer',fontSize:13}} onClick={onBack}>Back to Login</span></div>
+  </div>;
+}
 function AuthScreen({onLogin}){
   const[mode,setMode]=useState('login');
   const[role,setRole]=useState('ca');
@@ -559,9 +578,11 @@ function AuthScreen({onLogin}){
     </form>
     <div style={{textAlign:'center',marginTop:14,fontSize:13,color:'var(--gray)'}}>
       {mode==='login'?<>No account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('register');setErr('');}}>Register</span></>:<>Have account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('login');setErr('');}}>Login</span></>}
+      {mode==='login'&&<div style={{textAlign:'center',marginTop:8}}><span style={{color:'var(--blue)',cursor:'pointer',fontSize:13}} onClick={()=>setMode('forgot')}>Forgot password?</span></div>}
+      {mode==='forgot'&&<ForgotPassword onBack={()=>setMode('login')}/>}
     </div>
     <div style={{marginTop:18,padding:'12px',background:'var(--blue-l)',borderRadius:8,fontSize:12,color:'var(--gray)'}}>
-      <strong>Demo accounts (password: demo1234)</strong><br/>banker@demo.com · ca@demo.com · borrower@demo.com
+      
     </div>
   </div></div>);
 }
@@ -601,3 +622,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      

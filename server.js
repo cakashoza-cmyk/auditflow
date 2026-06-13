@@ -600,6 +600,37 @@ app.get('/api/analytics', auth(['banker','admin']), function(req, res) {
   res.json({ total:audits.length, byStage:Object.entries(byStage).map(function([stage,c]){ return {stage,c}; }), overdue, inadDP, pendingFee });
 });
 
+
+// -- PASSWORD RESET
+app.post('/api/auth/forgot-password', async function(req, res) {
+  const { email } = req.body;
+  const user = dbFindOne('users', { email });
+  if (!user) return res.status(400).json({ error: 'No account found with that email' });
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  dbUpdate('users', { id: user.id }, { reset_otp: otp, reset_otp_expires: expires });
+  sendEmail({
+    to: email, toName: user.name,
+    subject: '[AuditFlow] Password Reset OTP',
+    body: 'Dear ' + user.name + ',\n\nYour OTP to reset your AuditFlow password is:\n\n  ' + otp + '\n\nThis OTP is valid for 15 minutes. Do not share it with anyone.\n\nIf you did not request this, ignore this email.\n\nTeam AuditFlow',
+    type: 'otp'
+  });
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/reset-password', async function(req, res) {
+  const { email, otp, newPassword } = req.body;
+  const user = dbFindOne('users', { email });
+  if (!user) return res.status(400).json({ error: 'No account found' });
+  if (!user.reset_otp || user.reset_otp !== otp)
+    return res.status(400).json({ error: 'Invalid OTP' });
+  if (new Date() > new Date(user.reset_otp_expires))
+    return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
+  const hash = await bcrypt.hash(newPassword, 10);
+  dbUpdate('users', { id: user.id }, { password: hash, reset_otp: null, reset_otp_expires: null, is_temp_password: false });
+  res.json({ ok: true });
+});
+
 app.get('*', function(_, res) { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 // ── SEED ─────────────────────────────────────────────────────────────────
