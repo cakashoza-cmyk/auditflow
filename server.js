@@ -8,6 +8,7 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
 
 const app        = express();
 const PORT       = process.env.PORT || 3000;
@@ -102,11 +103,28 @@ function defaultDocs(auditId) {
   for (const d of docs) dbInsert('documents', { audit_id:auditId, ...d, uploaded_by:null, file_path:null });
 }
 
-// ── EMAIL SIMULATION ────────────────────────────────────────────────────
+// ── EMAIL ───────────────────────────────────────────────────────────────
+function getTransporter() {
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!user || !pass) return null;
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass }
+  });
+}
+
 function sendEmail({ to, toName, subject, body, type }) {
   const notif = dbInsert('notifications', { to_email:to, to_name:toName, subject, body, type,
     sent_at: new Date().toISOString(), status:'sent' });
   console.log('  EMAIL -> ' + to + ' | ' + subject);
+  const transporter = getTransporter();
+  if (transporter) {
+    transporter.sendMail({
+      from: '"AuditFlow" <' + process.env.SMTP_USER + '>',
+      to, subject, text: body
+    }).catch(err => console.error('Email error:', err.message));
+  }
   return notif;
 }
 
