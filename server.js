@@ -108,8 +108,10 @@ function getTransporter() {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   if (!user || !pass) return null;
+  const host = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
+  const port = parseInt(process.env.SMTP_PORT || '587');
   return nodemailer.createTransport({
-    service: 'gmail',
+    host, port, secure: false,
     auth: { user, pass }
   });
 }
@@ -129,7 +131,7 @@ function sendEmail({ to, toName, subject, body, type }) {
 }
 
 function sendWelcomeEmail({ name, email, role, tempPassword, auditId, borrowerName, bankName, caName, icaiNo }) {
-  const loginUrl = 'http://localhost:3000';
+  const loginUrl = process.env.APP_URL || 'http://localhost:3000';
   let subject, body;
   if (role === 'ca') {
     subject = '[AuditFlow] New audit assignment: ' + borrowerName;
