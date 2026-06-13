@@ -279,7 +279,21 @@ function ReportForm({audit,onClose,onRefresh}){
     if(finalize){onRefresh();setTimeout(()=>{setMsg('');onClose();},1500);}
     else setTimeout(()=>setMsg(''),2500);
   }
-  if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading…</div>;
+  const[aiLoading,setAiLoading]=useState(null);
+  const[aiMsgs,setAiMsgs]=useState({});
+  const[docTypes,setDocTypes]=useState([]);
+  const[showAI,setShowAI]=useState(false);
+  useEffect(()=>{if(\!readOnly)API.get('/api/ai-doc-types').then(setDocTypes);},[readOnly]);
+  async function runAI(file,docKey){
+    setAiLoading(docKey);setAiMsgs(p=>({...p,[docKey]:''}));
+    const fd=new FormData();fd.append('file',file);fd.append('doc_type',docKey);
+    const r=await fetch(`/api/audits/${audit.id}/ai-analyze`,{method:'POST',headers:{Authorization:`Bearer ${API.token()}`},body:fd}).then(x=>x.json());
+    setAiLoading(null);
+    if(r.error){setAiMsgs(p=>({...p,[docKey]:'Error: '+r.error}));return;}
+    if(r.result)setData(p=>({...p,...r.result}));
+    setAiMsgs(p=>({...p,[docKey]:'Done\! Review fields below.'}));
+  }
+    if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading…</div>;
   const SROWS=['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'];
   const DROWS=['< 30 days','30–60 days','60–90 days','90–180 days','> 180 days'];
   const stocks=data.stocks||SROWS.map(()=>({}));
@@ -296,7 +310,29 @@ function ReportForm({audit,onClose,onRefresh}){
       </div>
       {msg&&<div className={`alert ${msg.includes('finalized')?'alert-g':'alert-b'}`}>{msg}</div>}
       {dpAlert&&<div className="alert alert-r">⚠ {dpAlert}</div>}
-      <div className="rpt-section"><div className="rpt-sh">Section 1 — Borrower & Facility Details</div><div className="rpt-body">
+      {\!readOnly&&<div style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)',borderRadius:12,marginBottom:20,overflow:'hidden'}}>
+        <div style={{padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>setShowAI(p=>\!p)}>
+          <div><div style={{color:'#fff',fontWeight:800,fontSize:14}}>🤖 AI Document Analysis</div><div style={{color:'#94a3b8',fontSize:12,marginTop:2}}>Upload audit documents — Gemini AI reads each and pre-fills the report fields automatically</div></div>
+          <span style={{color:'#60a5fa',fontSize:20}}>{showAI?'▲':'▼'}</span>
+        </div>
+        {showAI&&<div style={{padding:'0 20px 16px'}}>
+          {docTypes.map(dt=>(<div key={dt.key} style={{background:'rgba(255,255,255,.07)',borderRadius:10,padding:'12px 14px',marginBottom:10}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10}}>
+              <div style={{flex:1}}>
+                <div style={{color:'#e2e8f0',fontWeight:700,fontSize:13}}>{dt.label}</div>
+                <div style={{color:'#94a3b8',fontSize:11.5,marginTop:3,lineHeight:1.5}}>{dt.description}</div>
+                {aiMsgs[dt.key]&&<div style={{fontSize:12,marginTop:6,color:aiMsgs[dt.key].startsWith('Done')?'#86efac':'#fca5a5'}}>{aiMsgs[dt.key]}</div>}
+              </div>
+              <label style={{background:aiLoading===dt.key?'#374151':'#2563eb',color:'#fff',borderRadius:8,padding:'7px 14px',fontWeight:700,fontSize:12,cursor:aiLoading?'default':'pointer',whiteSpace:'nowrap',flexShrink:0}}>
+                {aiLoading===dt.key?'Reading...':'Upload & Analyze'}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" style={{display:'none'}} disabled={\!\!aiLoading} onChange={e=>e.target.files[0]&&runAI(e.target.files[0],dt.key)}/>
+              </label>
+            </div>
+          </div>))}
+          <div style={{fontSize:11,color:'#64748b',marginTop:4}}>PDF, JPG, PNG supported. Max 20MB. Always review AI-filled fields before finalizing.</div>
+        </div>}
+      </div>}
+            <div className="rpt-section"><div className="rpt-sh">Section 1 — Borrower & Facility Details</div><div className="rpt-body">
         <div className="fg2"><div className="fg"><label>Borrower Name</label><input value={data.borrower_name||audit.borrower_name||''} onChange={e=>set('borrower_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Constitution</label><select value={data.constitution||audit.constitution||''} onChange={e=>set('constitution',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div></div>
         <div className="fg"><label>Address</label><input value={data.address||''} onChange={e=>set('address',e.target.value)} disabled={readOnly}/></div>
         <div className="fg2"><div className="fg"><label>City / Cluster</label><input value={data.city||audit.city||''} onChange={e=>set('city',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>GSTIN</label><input value={data.gstin||''} onChange={e=>set('gstin',e.target.value)} disabled={readOnly}/></div></div>
