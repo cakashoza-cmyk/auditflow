@@ -264,76 +264,246 @@ function ReportForm({audit,onClose,onRefresh}){
   const[saving,setSaving]=useState(false);
   const[msg,setMsg]=useState('');
   const[dpAlert,setDpAlert]=useState(null);
+  const[showAI,setShowAI]=useState(false);
+  const[aiLoading,setAiLoading]=useState(null);
+  const[aiMsgs,setAiMsgs]=useState({});
+  const[docTypes,setDocTypes]=useState([]);
   const{user}=useAuth();
   const readOnly=user.role!=='ca'&&user.role!=='admin';
   useEffect(()=>{API.get(`/api/audits/${audit.id}/report`).then(r=>{setData(r.data||{});setLoading(false);});},[audit.id]);
+  useEffect(()=>{if(!readOnly)API.get('/api/ai-doc-types').then(setDocTypes);},[readOnly]);
+
   function set(k,v){setData(p=>({...p,[k]:v}));}
-  function setStock(row,col,val){const s=[...(data.stocks||Array(6).fill({}))];s[row]={...s[row],[col]:val};setData(p=>({...p,stocks:s}));}
-  function setDebt(i,col,val){const d=[...(data.debtors||Array(5).fill({}))];d[i]={...d[i],[col]:val};setData(p=>({...p,debtors:d}));}
-  function calcDP(){
-    // Eligible stocks = rows 0-4 (exclude row 5=Total), good+slow only (exclude dead stock)
-    const s=data.stocks||[];
-    const eligibleStock=s.slice(0,5).reduce(function(sum,r){return sum+(parseFloat(r&&r.physical)||parseFloat(r&&r.books)||0);},0);
-    const deadPct=parseFloat(data.stock_dead_pct)||0;
-    const goodStock=eligibleStock*(1-deadPct/100);
-    // Eligible debtors = rows 0-2 (< 90 days)
-    const d=data.debtors||[];
-    const eligibleDebtors=(parseFloat(d[0]&&d[0].amount)||0)+(parseFloat(d[1]&&d[1].amount)||0)+(parseFloat(d[2]&&d[2].amount)||0);
-    // Creditors deducted
-    const creditors=parseFloat(data.total_creditors)||0;
-    // Standard 25% margin on stocks, 40% margin on debtors (typical bank norms)
-    const stockMargin=0.25,debtorMargin=0.40;
-    const dp=Math.max(0,(goodStock*(1-stockMargin))+(eligibleDebtors*(1-debtorMargin))-creditors);
-    const sanctioned=parseFloat(data.sanctioned_limit)||0;
-    return {dp:Math.round(dp), capped:sanctioned>0?Math.round(Math.min(dp,sanctioned)):Math.round(dp), goodStock:Math.round(goodStock), eligibleDebtors:Math.round(eligibleDebtors)};
+
+  function setStock(row,col,val){
+    const s=[...(data.stocks||Array(6).fill({}))];
+    s[row]={...s[row],[col]:val};
+    if(row<5&&(col==='books'||col==='physical')){
+      const b=parseFloat(col==='books'?val:(s[row].books||0))||0;
+      const p2=parseFloat(col==='physical'?val:(s[row].physical||0))||0;
+      s[row].diff=String(Math.round((p2-b)*100)/100);
+    }
+    ['books','physical','diff'].forEach(function(c){
+      const tot=s.slice(0,5).reduce(function(sum,r){return sum+(parseFloat(r&&r[c])||0);},0);
+      s[5]={...(s[5]||{}),[c]:tot!==0?String(Math.round(tot*100)/100):''};
+    });
+    setData(p=>({...p,stocks:s}));
   }
+
+  function setDebt(i,col,val){
+    const d=[...(data.debtors||Array(5).fill({}))];
+    d[i]={...d[i],[col]:val};
+    if(col==='amount'){
+      const total=d.reduce(function(s,r){return s+(parseFloat(r&&r.amount)||0);},0);
+      if(total>0)d.forEach(function(r,j){d[j]={...d[j],pct:total>0?String(Math.round((parseFloat(r.amount)||0)/total*100)):''};});
+    }
+    setData(p=>({...p,debtors:d}));
+  }
+
+  function calcDP(){
+    const s=data.stocks||[];
+    const totalPhysical=parseFloat((s[5]&&s[5].physical))||s.slice(0,5).reduce(function(sum,r){return sum+(parseFloat(r&&r.physical)||0);},0);
+    const deadPct=parseFloat(data.stock_dead_pct)||0;
+    const goodStock=Math.round(totalPhysical*(1-deadPct/100));
+    const d=data.debtors||[];
+    const eligDebtors=Math.round((parseFloat((d[0]&&d[0].amount))||0)+(parseFloat((d[1]&&d[1].amount))||0)+(parseFloat((d[2]&&d[2].amount))||0));
+    const creditors=parseFloat(data.total_creditors)||0;
+    const sMargin=(parseFloat(data.stock_margin_pct)||25)/100;
+    const dMargin=(parseFloat(data.debtor_margin_pct)||40)/100;
+    const grossDP=Math.round(Math.max(0,(goodStock*(1-sMargin))+(eligDebtors*(1-dMargin))-creditors));
+    const sanctioned=parseFloat(data.sanctioned_limit)||0;
+    const finalDP=sanctioned>0?Math.round(Math.min(grossDP,sanctioned)):grossDP;
+    const dpBank=parseFloat(data.dp_bank)||0;
+    const outstanding=parseFloat(data.outstanding)||0;
+    return{goodStock,eligDebtors,grossDP,finalDP,sMargin,dMargin,dpBank,outstanding,sanctioned,diff:dpBank>0?Math.round(dpBank-finalDP):null};
+  }
+
   const dpCalc=calcDP();
+
   async function save(finalize=false){
     setSaving(true);
     const r=await API.put(`/api/audits/${audit.id}/report`,{data,status:finalize?'finalized':'draft'});
     setSaving(false);
-    if(r.inadequate_dp)setDpAlert(`⚠ INADEQUATE DP: Calculated DP ₹${(r.dp_calculated||0).toLocaleString('en-IN')} is less than outstanding balance. Bank will be alerted.`);
+    if(r.inadequate_dp)setDpAlert(`INADEQUATE DP: Audit DP Rs.${(r.dp_calculated||0).toLocaleString('en-IN')} is below outstanding balance. Bank will be alerted.`);
     setMsg(finalize?'Report finalized!':'Draft saved.');
     if(finalize){onRefresh();setTimeout(()=>{setMsg('');onClose();},1500);}
     else setTimeout(()=>setMsg(''),2500);
   }
-  const[aiLoading,setAiLoading]=useState(null);
-  const[aiMsgs,setAiMsgs]=useState({});
-  const[docTypes,setDocTypes]=useState([]);
-  const[showAI,setShowAI]=useState(false);
-  useEffect(()=>{if(!readOnly)API.get('/api/ai-doc-types').then(setDocTypes);},[readOnly]);
+
+  function printReport(){
+    const w=window.open('','_blank','width=900,height=700');
+    const d=data;
+    const s=d.stocks||Array(6).fill({});
+    const deb=d.debtors||Array(5).fill({});
+    const dp=dpCalc;
+    w.document.write(`<!DOCTYPE html><html><head><title>RBI Stock Audit Report - ${audit.borrower_name}</title>
+<style>
+body{font-family:Arial,sans-serif;font-size:11px;color:#000;margin:20px;line-height:1.4}
+h1{font-size:14px;font-weight:bold;text-align:center;margin-bottom:4px}
+h2{font-size:12px;font-weight:bold;border-bottom:1.5px solid #000;padding-bottom:3px;margin:14px 0 6px}
+table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10.5px}
+th,td{border:1px solid #999;padding:4px 6px;text-align:left}
+th{background:#e8e8e8;font-weight:bold}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.field label{font-size:9px;color:#555;display:block;margin-bottom:1px}
+.field span{font-weight:600;font-size:11px}
+.dp-box{border:2px solid #1a56db;border-radius:6px;padding:10px;margin:10px 0;background:#eff6ff}
+.dp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.dp-item label{font-size:9px;color:#555}
+.dp-item span{font-weight:700;font-size:12px;display:block}
+.alert-red{background:#fee2e2;border:1px solid #ef4444;padding:6px 10px;border-radius:4px;color:#991b1b;font-weight:600}
+.cert{border:1px solid #999;padding:10px;margin-top:10px;font-style:italic;font-size:10px}
+.sig-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:30px}
+.sig-block{text-align:center;border-top:1px solid #000;padding-top:6px;font-size:10px}
+@media print{body{margin:10px}}
+</style></head><body>
+<h1>STOCK AUDIT REPORT</h1>
+<p style="text-align:center;font-size:10px;margin:0">As per RBI Guidelines on Stock Audits for Working Capital Facilities</p>
+<p style="text-align:center;font-size:10px;margin:2px 0 12px">Audit ID: ${audit.id} | Bank: ${d.bank_name||audit.bank_name} | Branch: ${d.branch||audit.branch}</p>
+
+<h2>Section 1 — Borrower & Facility Details</h2>
+<div class="grid2">
+  <div class="field"><label>Borrower Name</label><span>${d.borrower_name||audit.borrower_name||'-'}</span></div>
+  <div class="field"><label>Constitution</label><span>${d.constitution||'-'}</span></div>
+  <div class="field"><label>Address</label><span>${d.address||'-'}</span></div>
+  <div class="field"><label>GSTIN</label><span>${d.gstin||'-'}</span></div>
+  <div class="field"><label>Account No.</label><span>${d.account_no||'-'}</span></div>
+  <div class="field"><label>Facility Type</label><span>${d.facility_type||'-'}</span></div>
+  <div class="field"><label>Sanctioned Limit</label><span>Rs.${(parseFloat(d.sanctioned_limit)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Outstanding Balance</label><span>Rs.${(parseFloat(d.outstanding)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>DP as per Stock Statement (Borrower)</label><span>Rs.${(parseFloat(d.dp_bank)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>DP as per Audit</label><span>Rs.${(parseFloat(d.dp_audit)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Audit Period</label><span>${d.audit_period||'-'}</span></div>
+  <div class="field"><label>Date of Last Stock Statement</label><span>${d.last_stock_date||'-'}</span></div>
+  <div class="field"><label>Date of Site Visit</label><span>${d.visit_date||'-'}</span></div>
+</div>
+
+<div class="dp-box">
+  <strong style="font-size:11px">Drawing Power Computation</strong>
+  <div class="dp-grid" style="margin-top:6px">
+    <div class="dp-item"><label>Eligible Stocks (after dead stock)</label><span>Rs.${dp.goodStock.toLocaleString('en-IN')}</span></div>
+    <div class="dp-item"><label>Eligible Debtors (&lt;90 days)</label><span>Rs.${dp.eligDebtors.toLocaleString('en-IN')}</span></div>
+    <div class="dp-item"><label>Gross DP (Stock@${Math.round(dp.sMargin*100)}%, Debtor@${Math.round(dp.dMargin*100)}% margin, less creditors)</label><span>Rs.${dp.grossDP.toLocaleString('en-IN')}</span></div>
+    <div class="dp-item"><label>Final DP (capped at sanctioned limit)</label><span style="color:${dp.finalDP<dp.outstanding?'#dc2626':'#16a34a'}">Rs.${dp.finalDP.toLocaleString('en-IN')}</span></div>
+  </div>
+  ${dp.dpBank>0?`<div style="margin-top:6px;font-size:10px"><strong>DP Variance:</strong> Borrower declared Rs.${dp.dpBank.toLocaleString('en-IN')} | Audit computed Rs.${dp.finalDP.toLocaleString('en-IN')} | Difference: Rs.${Math.abs(dp.diff||0).toLocaleString('en-IN')} ${(dp.diff||0)>0?'(Borrower overstated)':'(Audit higher)'}</div>`:''}
+  ${dp.finalDP<dp.outstanding?`<div class="alert-red" style="margin-top:6px">INADEQUATE DP: Outstanding Rs.${dp.outstanding.toLocaleString('en-IN')} exceeds Audit DP Rs.${dp.finalDP.toLocaleString('en-IN')}</div>`:''}
+</div>
+
+<h2>Section 2 — Stock / Inventory Position</h2>
+<table>
+  <thead><tr><th>Category</th><th>As per Books (Rs.)</th><th>Physical Verification (Rs.)</th><th>Difference (Rs.)</th><th>Remarks</th></tr></thead>
+  <tbody>
+    ${['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'].map(function(row,i){
+      const r=s[i]||{};
+      return '<tr'+(i===5?' style="font-weight:bold;background:#f3f4f6"':'')+'><td>'+row+'</td><td>'+(r.books||'-')+'</td><td>'+(r.physical||'-')+'</td><td>'+(r.diff||'-')+'</td><td>'+(r.remarks||'-')+'</td></tr>';
+    }).join('')}
+  </tbody>
+</table>
+<div class="grid3">
+  <div class="field"><label>% Good / Active Stock</label><span>${d.stock_good_pct||'-'}%</span></div>
+  <div class="field"><label>% Slow Moving</label><span>${d.stock_slow_pct||'-'}%</span></div>
+  <div class="field"><label>% Non-Moving / Dead</label><span>${d.stock_dead_pct||'-'}%</span></div>
+</div>
+${d.stock_observations?'<div class="field"><label>Storage & Quality Observations</label><p>'+d.stock_observations+'</p></div>':''}
+
+<h2>Section 3 — Book Debts / Debtors</h2>
+<table>
+  <thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Remarks</th></tr></thead>
+  <tbody>
+    ${['< 30 days','30-60 days','60-90 days','90-180 days','> 180 days'].map(function(row,i){
+      const r=deb[i]||{};
+      return '<tr><td>'+row+'</td><td>'+(r.amount||'-')+'</td><td>'+(r.pct||'-')+'%</td><td>'+(r.remarks||'-')+'</td></tr>';
+    }).join('')}
+  </tbody>
+</table>
+<div class="grid2">
+  <div class="field"><label>Total Debtors</label><span>Rs.${(parseFloat(d.total_debtors)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Debtors eligible for DP</label><span>Rs.${(parseFloat(d.dp_debtors)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Disputed / Sticky Debtors</label><span>Rs.${(parseFloat(d.disputed_debtors)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Related Party Debtors</label><span>Rs.${(parseFloat(d.related_debtors)||0).toLocaleString('en-IN')}</span></div>
+</div>
+${d.debtor_observations?'<div class="field"><label>Observations</label><p>'+d.debtor_observations+'</p></div>':''}
+
+<h2>Section 4 — Creditors</h2>
+<div class="grid2">
+  <div class="field"><label>Total Creditors</label><span>Rs.${(parseFloat(d.total_creditors)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Creditors > 90 days</label><span>Rs.${(parseFloat(d.old_creditors)||0).toLocaleString('en-IN')}</span></div>
+</div>
+${d.creditor_observations?'<div class="field"><label>Observations</label><p>'+d.creditor_observations+'</p></div>':''}
+
+<h2>Section 5 — Insurance</h2>
+<div class="grid3">
+  <div class="field"><label>Insurer</label><span>${d.insurer||'-'}</span></div>
+  <div class="field"><label>Policy No.</label><span>${d.policy_no||'-'}</span></div>
+  <div class="field"><label>Expiry Date</label><span>${d.policy_expiry||'-'}</span></div>
+  <div class="field"><label>Sum Insured</label><span>Rs.${(parseFloat(d.sum_insured)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Coverage Type</label><span>${d.coverage_type||'-'}</span></div>
+  <div class="field"><label>Bank as Mortgagee?</label><span>${d.bank_mortgagee||'-'}</span></div>
+</div>
+${parseFloat(d.sum_insured)>0&&parseFloat(d.outstanding)>0&&parseFloat(d.sum_insured)<parseFloat(d.outstanding)?'<div class="alert-red">Insurance Inadequate: Sum insured Rs.'+(parseFloat(d.sum_insured)||0).toLocaleString('en-IN')+' is less than outstanding Rs.'+(parseFloat(d.outstanding)||0).toLocaleString('en-IN')+'</div>':''}
+${d.insurance_observations?'<div class="field"><label>Remarks</label><p>'+d.insurance_observations+'</p></div>':''}
+
+<h2>Section 6 — Observations & Compliance</h2>
+${d.records_obs?'<div class="field"><label>Record Keeping & Accounting</label><p>'+d.records_obs+'</p></div>':''}
+${d.ops_obs?'<div class="field"><label>Operations & Business Activity</label><p>'+d.ops_obs+'</p></div>':''}
+${d.discrepancies?'<div class="field"><label>Key Discrepancies</label><p>'+d.discrepancies+'</p></div>':''}
+<div class="field"><label>Sanction Compliance</label><span>${d.sanction_compliance||'-'}</span></div>
+
+<h2>Section 7 — Rating & Certification</h2>
+<div class="grid2">
+  <div class="field"><label>Overall Rating</label><span>${d.rating?d.rating+'/6':'-'} ${['','(Excellent)','(Good)','(Satisfactory)','(Below Average)','(Poor)','(Unsatisfactory)'][parseInt(d.rating)||0]}</span></div>
+  <div class="field"><label>Sanction Compliance</label><span>${d.sanction_compliance||'-'}</span></div>
+</div>
+${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p>'+d.recommendations+'</p></div>':''}
+
+<div class="cert">${d.certificate||'I certify that I have physically verified the stocks and books of the above borrower and the information contained in this report is true and correct to the best of my knowledge and belief.'}</div>
+
+<div class="sig-row">
+  <div class="sig-block"><strong>${d.ca_name||'CA Name'}</strong><br>ICAI No.: ${d.icai_no||'-'}<br>Firm: ${d.firm_name||'-'}<br>FRN: ${d.firm_reg_no||'-'}</div>
+  <div class="sig-block"><strong>Date of Report</strong><br>${d.report_date||'-'}</div>
+  <div class="sig-block"><strong>Stamp & Signature</strong><br>&nbsp;</div>
+</div>
+</body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(function(){w.print();},500);
+  }
+
   async function loadPdfJs(){if(window.pdfjsLib)return;await new Promise(function(resolve,reject){const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}
   async function pdfToJpeg(file){await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;const page=await pdf.getPage(1);const vp=page.getViewport({scale:2.0});const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;return new Promise(function(resolve){canvas.toBlob(resolve,'image/jpeg',0.92);});}
-  async function runAI(file,docKey){setAiLoading(docKey);setAiMsgs(p=>({...p,[docKey]:'Uploading...'}));let uploadFile=file;const isPdfFile=file.type==='application/pdf'||/\.pdf$/i.test(file.name);if(isPdfFile){try{setAiMsgs(p=>({...p,[docKey]:'Reading PDF page 1...'}));const blob=await pdfToJpeg(file);uploadFile=new File([blob],file.name.replace(/\.pdf$/i,'.jpg'),{type:'image/jpeg'});}catch(e){/* fall back to server text extraction */}}
-    const fd=new FormData();fd.append('file',uploadFile);fd.append('doc_type',docKey);const r=await fetch(`/api/audits/${audit.id}/ai-analyze`,{method:'POST',headers:{Authorization:`Bearer ${API.token()}`},body:fd}).then(x=>x.json());setAiLoading(null);if(r.error){setAiMsgs(p=>({...p,[docKey]:'Error: '+r.error}));return;}if(r.result){const res=r.result;let filled=0;Object.keys(res).forEach(function(k){if(k==='ai_summary')return;if(k==='stocks'){if(res.stocks)res.stocks.forEach(function(row){if(row)Object.values(row).forEach(function(v){if(v!==null&&v!==undefined&&v!=='')filled++;});});return;}if(k==='debtors'){if(res.debtors)res.debtors.forEach(function(row){if(row)Object.values(row).forEach(function(v){if(v!==null&&v!==undefined&&v!=='')filled++;});});return;}if(res[k]!==null&&res[k]!==undefined&&res[k]!=='')filled++;});if(filled>0){setData(p=>{const next={...p};Object.keys(res).forEach(function(k){if(k==='stocks'||k==='debtors'||k==='ai_summary')return;if(res[k]!==null&&res[k]!==undefined&&res[k]!=='')next[k]=res[k];});if(res.stocks&&Array.isArray(res.stocks)){const s=[...(p.stocks||Array(6).fill({}))];res.stocks.forEach(function(row,i){if(!row)return;const m={...s[i]};Object.keys(row).forEach(function(c){if(row[c]!==null&&row[c]!==undefined&&row[c]!=='')m[c]=row[c];});s[i]=m;});next.stocks=s;}if(res.debtors&&Array.isArray(res.debtors)){const d=[...(p.debtors||Array(5).fill({}))];res.debtors.forEach(function(row,i){if(!row)return;const m={...d[i]};Object.keys(row).forEach(function(c){if(row[c]!==null&&row[c]!==undefined&&row[c]!=='')m[c]=row[c];});d[i]=m;});next.debtors=d;}return next;});setAiMsgs(p=>({...p,[docKey]:'Done! '+filled+' fields filled.'}));}else{setAiMsgs(p=>({...p,[docKey]:'AI could not read document. Try a JPG/PNG screenshot instead.'}));}}else{setAiMsgs(p=>({...p,[docKey]:'No data returned. Try again or use a clearer image.'}));}}
-    if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading…</div>;
+  async function runAI(file,docKey){setAiLoading(docKey);setAiMsgs(p=>({...p,[docKey]:'Uploading...'}));let uploadFile=file;const isPdfFile=file.type==='application/pdf'||/\.pdf$/i.test(file.name);if(isPdfFile){try{setAiMsgs(p=>({...p,[docKey]:'Reading PDF...'}));const blob=await pdfToJpeg(file);uploadFile=new File([blob],file.name.replace(/\.pdf$/i,'.jpg'),{type:'image/jpeg'});}catch(e){}}
+    const fd=new FormData();fd.append('file',uploadFile);fd.append('doc_type',docKey);const r=await fetch(`/api/audits/${audit.id}/ai-analyze`,{method:'POST',headers:{Authorization:`Bearer ${API.token()}`},body:fd}).then(x=>x.json());setAiLoading(null);if(r.error){setAiMsgs(p=>({...p,[docKey]:'Error: '+r.error}));return;}if(r.result){const res=r.result;let filled=0;Object.keys(res).forEach(function(k){if(k==='ai_summary')return;if(k==='stocks'){if(res.stocks)res.stocks.forEach(function(row){if(row)Object.values(row).forEach(function(v){if(v!==null&&v!==undefined&&v!=='')filled++;});});return;}if(k==='debtors'){if(res.debtors)res.debtors.forEach(function(row){if(row)Object.values(row).forEach(function(v){if(v!==null&&v!==undefined&&v!=='')filled++;});});return;}if(res[k]!==null&&res[k]!==undefined&&res[k]!=='')filled++;});if(filled>0){setData(p=>{const next={...p};Object.keys(res).forEach(function(k){if(k==='stocks'||k==='debtors'||k==='ai_summary')return;if(res[k]!==null&&res[k]!==undefined&&res[k]!=='')next[k]=res[k];});if(res.stocks&&Array.isArray(res.stocks)){const s=[...(p.stocks||Array(6).fill({}))];res.stocks.forEach(function(row,i){if(!row)return;const m={...s[i]};Object.keys(row).forEach(function(c){if(row[c]!==null&&row[c]!==undefined&&row[c]!=='')m[c]=row[c];});s[i]=m;});next.stocks=s;}if(res.debtors&&Array.isArray(res.debtors)){const d=[...(p.debtors||Array(5).fill({}))];res.debtors.forEach(function(row,i){if(!row)return;const m={...d[i]};Object.keys(row).forEach(function(c){if(row[c]!==null&&row[c]!==undefined&&row[c]!=='')m[c]=row[c];});d[i]=m;});next.debtors=d;}return next;});setAiMsgs(p=>({...p,[docKey]:'Done! '+filled+' fields filled.'}));}else{setAiMsgs(p=>({...p,[docKey]:'Could not extract data. Try a clearer JPG/PNG.'}));}}else{setAiMsgs(p=>({...p,[docKey]:'No data returned. Try again.'}));}}
+
+  if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading...</div>;
   const SROWS=['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'];
-  const DROWS=['< 30 days','30–60 days','60–90 days','90–180 days','> 180 days'];
+  const DROWS=['< 30 days','30-60 days','60-90 days','90-180 days','> 180 days'];
   const stocks=data.stocks||SROWS.map(()=>({}));
   const debtors=data.debtors||DROWS.map(()=>({}));
   const ratings=[{r:'1',label:'Excellent',desc:'Negligible risk'},{r:'2',label:'Good',desc:'Low risk'},{r:'3',label:'Satisfactory',desc:'Manageable'},{r:'4',label:'Below Avg',desc:'Significant gaps'},{r:'5',label:'Poor',desc:'Deficiencies'},{r:'6',label:'Unsatisfactory',desc:'Critical'}];
   return(
-    <div style={{maxWidth:900,margin:'0 auto'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+    <div style={{maxWidth:920,margin:'0 auto'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18,flexWrap:'wrap',gap:8}}>
         <div><div className="section-t">RBI Stock Audit Report</div><div style={{fontSize:12.5,color:'var(--gray)'}}>{audit.id} · {audit.borrower_name}</div></div>
-        <div style={{display:'flex',gap:8}}>
-          <button className="btn btn-o" onClick={onClose}>← Back</button>
-          {!readOnly&&<><button className="btn btn-o" onClick={()=>save(false)} disabled={saving}>{saving?'Saving…':'💾 Save Draft'}</button><button className="btn btn-g" onClick={()=>save(true)} disabled={saving}>🏁 Finalize & Submit</button></>}
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <button className="btn btn-o" onClick={onClose}>Back</button>
+          <button className="btn btn-o" onClick={printReport} style={{background:'#7c3aed',color:'#fff',border:'none'}}>Print / PDF</button>
+          {!readOnly&&<><button className="btn btn-o" onClick={()=>save(false)} disabled={saving}>{saving?'Saving...':'Save Draft'}</button><button className="btn btn-g" onClick={()=>save(true)} disabled={saving}>Finalize & Submit</button></>}
         </div>
       </div>
       {msg&&<div className={`alert ${msg.includes('finalized')?'alert-g':'alert-b'}`}>{msg}</div>}
-      {dpAlert&&<div className="alert alert-r">⚠ {dpAlert}</div>}
+      {dpAlert&&<div className="alert alert-r">{dpAlert}</div>}
+
       {!readOnly&&<div style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)',borderRadius:12,marginBottom:20,overflow:'hidden'}}>
         <div style={{padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>setShowAI(p=>!p)}>
-          <div><div style={{color:'#fff',fontWeight:800,fontSize:14}}>🤖 AI Document Analysis</div><div style={{color:'#94a3b8',fontSize:12,marginTop:2}}>Upload audit documents — Gemini AI reads each and pre-fills the report fields automatically</div></div>
+          <div><div style={{color:'#fff',fontWeight:800,fontSize:14}}>AI Document Analysis</div><div style={{color:'#94a3b8',fontSize:12,marginTop:2}}>Upload documents — AI reads and pre-fills report fields</div></div>
           <span style={{color:'#60a5fa',fontSize:20}}>{showAI?'▲':'▼'}</span>
         </div>
         {showAI&&<div style={{padding:'0 20px 16px'}}>
           {docTypes.map(dt=>(<div key={dt.key} style={{background:'rgba(255,255,255,.07)',borderRadius:10,padding:'12px 14px',marginBottom:10}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10}}>
-              <div style={{flex:1}}>
-                <div style={{color:'#e2e8f0',fontWeight:700,fontSize:13}}>{dt.label}</div>
-                <div style={{color:'#94a3b8',fontSize:11.5,marginTop:3,lineHeight:1.5}}>{dt.description}</div>
+              <div style={{flex:1}}><div style={{color:'#e2e8f0',fontWeight:700,fontSize:13}}>{dt.label}</div>
                 {aiMsgs[dt.key]&&<div style={{fontSize:12,marginTop:6,color:aiMsgs[dt.key].startsWith('Done')?'#86efac':'#fca5a5'}}>{aiMsgs[dt.key]}</div>}
               </div>
               <label style={{background:aiLoading===dt.key?'#374151':'#2563eb',color:'#fff',borderRadius:8,padding:'7px 14px',fontWeight:700,fontSize:12,cursor:aiLoading?'default':'pointer',whiteSpace:'nowrap',flexShrink:0}}>
@@ -345,54 +515,80 @@ function ReportForm({audit,onClose,onRefresh}){
           <div style={{fontSize:11,color:'#64748b',marginTop:4}}>PDF, JPG, PNG supported. Max 20MB. Always review AI-filled fields before finalizing.</div>
         </div>}
       </div>}
-            <div className="rpt-section"><div className="rpt-sh">Section 1 — Borrower & Facility Details</div><div className="rpt-body">
+
+      <div className="rpt-section"><div className="rpt-sh">Section 1 — Borrower & Facility Details</div><div className="rpt-body">
         <div className="fg2"><div className="fg"><label>Borrower Name</label><input value={data.borrower_name||audit.borrower_name||''} onChange={e=>set('borrower_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Constitution</label><select value={data.constitution||audit.constitution||''} onChange={e=>set('constitution',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div></div>
         <div className="fg"><label>Address</label><input value={data.address||''} onChange={e=>set('address',e.target.value)} disabled={readOnly}/></div>
         <div className="fg2"><div className="fg"><label>City / Cluster</label><input value={data.city||audit.city||''} onChange={e=>set('city',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>GSTIN</label><input value={data.gstin||''} onChange={e=>set('gstin',e.target.value)} disabled={readOnly}/></div></div>
         <div className="fg3"><div className="fg"><label>Bank</label><input value={data.bank_name||audit.bank_name||''} onChange={e=>set('bank_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Branch</label><input value={data.branch||audit.branch||''} onChange={e=>set('branch',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Account No.</label><input value={data.account_no||''} onChange={e=>set('account_no',e.target.value)} disabled={readOnly}/></div></div>
-        <div className="fg3"><div className="fg"><label>Facility Type</label><select value={data.facility_type||''} onChange={e=>set('facility_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Cash Credit','Overdraft','WCDL','PCFC','Packing Credit'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Sanctioned Limit (₹)</label><input value={data.sanctioned_limit||''} onChange={e=>set('sanctioned_limit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Outstanding Balance (₹)</label><input value={data.outstanding||''} onChange={e=>set('outstanding',e.target.value)} disabled={readOnly} placeholder="Used for DP check"/></div></div>
-        <div className="fg3"><div className="fg"><label>DP as per Bank (₹)</label><input value={data.dp_bank||''} onChange={e=>set('dp_bank',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>DP as per Audit (₹)</label><input value={data.dp_audit||''} onChange={e=>set('dp_audit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Audit Period</label><input value={data.audit_period||''} onChange={e=>set('audit_period',e.target.value)} disabled={readOnly} placeholder="e.g. April 2024"/></div></div>
-        {dpCalc.dp>0&&<div style={{background:'rgba(96,165,250,.1)',border:'1.5px solid var(--blue)',borderRadius:10,padding:'12px 16px',marginBottom:10}}>
-          <div style={{fontWeight:700,fontSize:13,color:'var(--blue)',marginBottom:6}}>Auto-Calculated Drawing Power</div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,fontSize:12}}>
-            <div><div style={{color:'var(--gray)'}}>Eligible Stocks</div><div style={{fontWeight:700}}>\u20b9{dpCalc.goodStock.toLocaleString('en-IN')}</div></div>
-            <div><div style={{color:'var(--gray)'}}>&lt;90d Debtors</div><div style={{fontWeight:700}}>\u20b9{dpCalc.eligibleDebtors.toLocaleString('en-IN')}</div></div>
-            <div><div style={{color:'var(--gray)'}}>Gross DP (25%/40% margin)</div><div style={{fontWeight:700}}>\u20b9{dpCalc.dp.toLocaleString('en-IN')}</div></div>
-            <div><div style={{color:'var(--gray)'}}>DP (capped at limit)</div><div style={{fontWeight:700,color:dpCalc.capped<(parseFloat(data.outstanding)||0)?'var(--red)':'var(--green)'}}>\u20b9{dpCalc.capped.toLocaleString('en-IN')}</div></div>
-          </div>
-          {dpCalc.capped<(parseFloat(data.outstanding)||0)&&<div style={{marginTop:8,color:'var(--red)',fontSize:12,fontWeight:600}}>\u26a0 Inadequate DP \u2014 outstanding \u20b9{(parseFloat(data.outstanding)||0).toLocaleString('en-IN')} exceeds DP \u20b9{dpCalc.capped.toLocaleString('en-IN')}</div>}
-          {!readOnly&&<button type="button" style={{marginTop:8,fontSize:11,background:'var(--blue)',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',cursor:'pointer'}} onClick={()=>{set('dp_audit',String(dpCalc.capped));}}>Apply to DP as per Audit</button>}
+        <div className="fg3"><div className="fg"><label>Facility Type</label><select value={data.facility_type||''} onChange={e=>set('facility_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Cash Credit','Overdraft','WCDL','PCFC','Packing Credit'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Sanctioned Limit (Rs.)</label><input value={data.sanctioned_limit||''} onChange={e=>set('sanctioned_limit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Outstanding Balance (Rs.)</label><input value={data.outstanding||''} onChange={e=>set('outstanding',e.target.value)} disabled={readOnly} placeholder="Used for DP check"/></div></div>
+        <div className="fg3"><div className="fg"><label>DP as per Stock Statement (Borrower)</label><input value={data.dp_bank||''} onChange={e=>set('dp_bank',e.target.value)} disabled={readOnly} placeholder="Borrower declared DP"/></div><div className="fg"><label>DP as per Audit (Rs.)</label><input value={data.dp_audit||''} onChange={e=>set('dp_audit',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Audit Period</label><input value={data.audit_period||''} onChange={e=>set('audit_period',e.target.value)} disabled={readOnly} placeholder="e.g. April 2024"/></div></div>
+        {data.dp_bank&&data.dp_audit&&<div style={{padding:'8px 12px',background:'rgba(245,158,11,.1)',border:'1px solid var(--amber)',borderRadius:8,fontSize:12.5,marginBottom:8}}>
+          <strong>DP Variance:</strong> Borrower declared Rs.{(parseFloat(data.dp_bank)||0).toLocaleString('en-IN')} vs Audit DP Rs.{(parseFloat(data.dp_audit)||0).toLocaleString('en-IN')} — Difference: <strong style={{color:(parseFloat(data.dp_bank)||0)>(parseFloat(data.dp_audit)||0)?'var(--red)':'var(--green)'}}>Rs.{Math.abs((parseFloat(data.dp_bank)||0)-(parseFloat(data.dp_audit)||0)).toLocaleString('en-IN')} {(parseFloat(data.dp_bank)||0)>(parseFloat(data.dp_audit)||0)?'(Borrower overstated)':'(Audit higher)'}</strong>
         </div>}
         <div className="fg2"><div className="fg"><label>Date of Last Stock Statement</label><input type="date" value={data.last_stock_date||''} onChange={e=>set('last_stock_date',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Date of Site Visit</label><input type="date" value={data.visit_date||''} onChange={e=>set('visit_date',e.target.value)} disabled={readOnly}/></div></div>
       </div></div>
+
       <div className="rpt-section"><div className="rpt-sh">Section 2 — Stock / Inventory Position</div><div className="rpt-body">
-        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th style={{width:'22%'}}>Category</th><th>Books (₹)</th><th>Physical (₹)</th><th>Difference (₹)</th><th>Remarks</th></tr></thead><tbody>{SROWS.map((row,i)=>(<tr key={row} style={i===5?{fontWeight:700,background:'var(--gray-l)'}:{}}><td style={{fontWeight:600,fontSize:12.5}}>{row}</td><td><input value={((stocks[i]&&stocks[i].books)||'')} onChange={e=>setStock(i,'books',e.target.value)} disabled={readOnly}/></td><td><input value={((stocks[i]&&stocks[i].physical)||'')} onChange={e=>setStock(i,'physical',e.target.value)} disabled={readOnly}/></td><td><input value={((stocks[i]&&stocks[i].diff)||'')} onChange={e=>setStock(i,'diff',e.target.value)} disabled={readOnly}/></td><td><input value={((stocks[i]&&stocks[i].remarks)||'')} onChange={e=>setStock(i,'remarks',e.target.value)} disabled={readOnly}/></td></tr>))}</tbody></table></div>
-        <div className="fg3" style={{marginTop:14}}><div className="fg"><label>% Good Stock</label><input value={data.stock_good_pct||''} onChange={e=>set('stock_good_pct',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>% Slow Moving</label><input value={data.stock_slow_pct||''} onChange={e=>set('stock_slow_pct',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>% Non-Moving / Dead</label><input value={data.stock_dead_pct||''} onChange={e=>set('stock_dead_pct',e.target.value)} disabled={readOnly}/></div></div>
+        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th style={{width:'20%'}}>Category</th><th>As per Books (Rs.)</th><th>Physical Verified (Rs.)</th><th>Difference (Rs.)</th><th>Remarks</th></tr></thead>
+        <tbody>{SROWS.map((row,i)=>{
+          const isTotal=i===5;
+          return(<tr key={row} style={isTotal?{fontWeight:700,background:'var(--gray-l)'}:{}}>
+            <td style={{fontWeight:600,fontSize:12.5}}>{row}</td>
+            <td><input value={(stocks[i]&&stocks[i].books)||''} onChange={e=>setStock(i,'books',e.target.value)} disabled={readOnly||isTotal} style={isTotal?{fontWeight:700}:{}}/></td>
+            <td><input value={(stocks[i]&&stocks[i].physical)||''} onChange={e=>setStock(i,'physical',e.target.value)} disabled={readOnly||isTotal} style={isTotal?{fontWeight:700}:{}}/></td>
+            <td><input value={(stocks[i]&&stocks[i].diff)||''} readOnly style={{background:'var(--gray-l)',cursor:'default',fontWeight:isTotal?700:400}}/></td>
+            <td><input value={(stocks[i]&&stocks[i].remarks)||''} onChange={e=>setStock(i,'remarks',e.target.value)} disabled={readOnly}/></td>
+          </tr>);
+        })}</tbody></table></div>
+        <div style={{background:'rgba(96,165,250,.08)',border:'1.5px solid var(--blue)',borderRadius:10,padding:'14px 16px',margin:'14px 0'}}>
+          <div style={{fontWeight:700,fontSize:13,color:'var(--blue)',marginBottom:10}}>Drawing Power Calculator</div>
+          <div className="fg3" style={{marginBottom:10}}>
+            <div className="fg"><label>Stock Margin % (bank norm)</label><input type="number" value={data.stock_margin_pct||25} onChange={e=>set('stock_margin_pct',e.target.value)} disabled={readOnly} min={0} max={100}/></div>
+            <div className="fg"><label>Debtor Margin % (bank norm)</label><input type="number" value={data.debtor_margin_pct||40} onChange={e=>set('debtor_margin_pct',e.target.value)} disabled={readOnly} min={0} max={100}/></div>
+            <div className="fg"><label>% Non-Moving / Dead Stock</label><input type="number" value={data.stock_dead_pct||''} onChange={e=>set('stock_dead_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,fontSize:12}}>
+            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Stocks</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.goodStock.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Physical less dead stock</div></div>
+            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Debtors (&lt;90d)</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.eligDebtors.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Debtors aged under 90 days</div></div>
+            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Gross DP</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.grossDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Stock@{Math.round(dpCalc.sMargin*100)}% + Debtor@{Math.round(dpCalc.dMargin*100)}% margin, less creditors</div></div>
+            <div style={{background:dpCalc.finalDP<dpCalc.outstanding?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)',borderRadius:8,padding:'8px 10px',border:'1px solid '+(dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)')}}><div style={{color:'var(--gray)',marginBottom:2}}>Final DP (capped)</div><div style={{fontWeight:700,fontSize:14,color:dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)'}}>Rs.{dpCalc.finalDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Min of Gross DP & Sanctioned limit</div></div>
+          </div>
+          {dpCalc.finalDP<dpCalc.outstanding&&<div style={{marginTop:10,color:'var(--red)',fontWeight:600,fontSize:12.5}}>INADEQUATE DP — Outstanding Rs.{dpCalc.outstanding.toLocaleString('en-IN')} exceeds Audit DP Rs.{dpCalc.finalDP.toLocaleString('en-IN')} by Rs.{(dpCalc.outstanding-dpCalc.finalDP).toLocaleString('en-IN')}</div>}
+          {!readOnly&&dpCalc.grossDP>0&&<button type="button" style={{marginTop:10,fontSize:12,background:'var(--blue)',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',cursor:'pointer',fontWeight:600}} onClick={()=>set('dp_audit',String(dpCalc.finalDP))}>Apply Rs.{dpCalc.finalDP.toLocaleString('en-IN')} to DP as per Audit</button>}
+        </div>
+        <div className="fg2"><div className="fg"><label>% Good / Active Stock</label><input value={data.stock_good_pct||''} onChange={e=>set('stock_good_pct',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>% Slow Moving</label><input value={data.stock_slow_pct||''} onChange={e=>set('stock_slow_pct',e.target.value)} disabled={readOnly}/></div></div>
         <div className="fg"><label>Storage & Quality Observations</label><textarea value={data.stock_observations||''} onChange={e=>set('stock_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
+
       <div className="rpt-section"><div className="rpt-sh">Section 3 — Book Debts / Debtors Analysis</div><div className="rpt-body">
-        <div className="fg2"><div className="fg"><label>Total Debtors (₹)</label><input value={data.total_debtors||''} onChange={e=>set('total_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Debtors for DP (₹)</label><input value={data.dp_debtors||''} onChange={e=>set('dp_debtors',e.target.value)} disabled={readOnly} placeholder="Used for DP calculation"/></div></div>
-        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging</th><th>Amount (₹)</th><th>% of Total</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>(<tr key={row}><td style={{fontWeight:600,fontSize:12.5}}>{row}</td><td><input value={((debtors[i]&&debtors[i].amount)||'')} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td><td><input value={((debtors[i]&&debtors[i].pct)||'')} onChange={e=>setDebt(i,'pct',e.target.value)} disabled={readOnly}/></td><td><input value={((debtors[i]&&debtors[i].remarks)||'')} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td></tr>))}</tbody></table></div>
-        <div className="fg2" style={{marginTop:12}}><div className="fg"><label>Disputed / Sticky Debtors (₹)</label><input value={data.disputed_debtors||''} onChange={e=>set('disputed_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Related Party Debtors (₹)</label><input value={data.related_debtors||''} onChange={e=>set('related_debtors',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg2"><div className="fg"><label>Total Debtors (Rs.)</label><input value={data.total_debtors||''} onChange={e=>set('total_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Debtors eligible for DP (Rs.)</label><input value={data.dp_debtors||''} onChange={e=>set('dp_debtors',e.target.value)} disabled={readOnly} placeholder="Used for DP calculation"/></div></div>
+        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>(<tr key={row}><td style={{fontWeight:600,fontSize:12.5}}>{row}</td><td><input value={(debtors[i]&&debtors[i].amount)||''} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td><td><input value={(debtors[i]&&debtors[i].pct)||''} readOnly style={{background:'var(--gray-l)',cursor:'default'}}/></td><td><input value={(debtors[i]&&debtors[i].remarks)||''} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td></tr>))}</tbody></table></div>
+        <div className="fg2" style={{marginTop:12}}><div className="fg"><label>Disputed / Sticky Debtors (Rs.)</label><input value={data.disputed_debtors||''} onChange={e=>set('disputed_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Related Party Debtors (Rs.)</label><input value={data.related_debtors||''} onChange={e=>set('related_debtors',e.target.value)} disabled={readOnly}/></div></div>
         <div className="fg"><label>Observations</label><textarea value={data.debtor_observations||''} onChange={e=>set('debtor_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
+
       <div className="rpt-section"><div className="rpt-sh">Section 4 — Creditors</div><div className="rpt-body">
-        <div className="fg2"><div className="fg"><label>Total Creditors (₹)</label><input value={data.total_creditors||''} onChange={e=>set('total_creditors',e.target.value)} disabled={readOnly} placeholder="Used for DP calculation"/></div><div className="fg"><label>Creditors &gt; 90 days (₹)</label><input value={data.old_creditors||''} onChange={e=>set('old_creditors',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg2"><div className="fg"><label>Total Creditors (Rs.)</label><input value={data.total_creditors||''} onChange={e=>set('total_creditors',e.target.value)} disabled={readOnly} placeholder="Deducted in DP calc"/></div><div className="fg"><label>Creditors &gt; 90 days (Rs.)</label><input value={data.old_creditors||''} onChange={e=>set('old_creditors',e.target.value)} disabled={readOnly}/></div></div>
         <div className="fg"><label>Observations</label><textarea value={data.creditor_observations||''} onChange={e=>set('creditor_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
+
       <div className="rpt-section"><div className="rpt-sh">Section 5 — Insurance</div><div className="rpt-body">
         <div className="fg3"><div className="fg"><label>Insurer</label><input value={data.insurer||''} onChange={e=>set('insurer',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Policy No.</label><input value={data.policy_no||''} onChange={e=>set('policy_no',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Expiry Date</label><input type="date" value={data.policy_expiry||''} onChange={e=>set('policy_expiry',e.target.value)} disabled={readOnly}/></div></div>
-        <div className="fg3"><div className="fg"><label>Sum Insured (₹)</label><input value={data.sum_insured||''} onChange={e=>set('sum_insured',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Coverage</label><select value={data.coverage_type||''} onChange={e=>set('coverage_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Fire','Burglary','Flood','All Risk','Marine'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Bank Shown as Mortgagee?</label><select value={data.bank_mortgagee||''} onChange={e=>set('bank_mortgagee',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Yes</option><option>No</option></select></div></div>
+        <div className="fg3"><div className="fg"><label>Sum Insured (Rs.)</label><input value={data.sum_insured||''} onChange={e=>set('sum_insured',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Coverage</label><select value={data.coverage_type||''} onChange={e=>set('coverage_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Fire','Burglary','Flood','All Risk','Marine'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Bank Shown as Mortgagee?</label><select value={data.bank_mortgagee||''} onChange={e=>set('bank_mortgagee',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Yes</option><option>No</option></select></div></div>
+        {data.sum_insured&&data.outstanding&&parseFloat(data.sum_insured)<parseFloat(data.outstanding)&&<div style={{color:'var(--red)',fontWeight:600,fontSize:12.5,marginBottom:8}}>Insurance Inadequate: Sum insured Rs.{(parseFloat(data.sum_insured)||0).toLocaleString('en-IN')} is less than outstanding Rs.{(parseFloat(data.outstanding)||0).toLocaleString('en-IN')}</div>}
         <div className="fg"><label>Adequacy Remarks</label><textarea value={data.insurance_observations||''} onChange={e=>set('insurance_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
-      <div className="rpt-section"><div className="rpt-sh">Section 6 — Observations</div><div className="rpt-body">
+
+      <div className="rpt-section"><div className="rpt-sh">Section 6 — Observations & Compliance</div><div className="rpt-body">
         <div className="fg"><label>Record Keeping & Accounting</label><textarea value={data.records_obs||''} onChange={e=>set('records_obs',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Operations & Business Activity</label><textarea value={data.ops_obs||''} onChange={e=>set('ops_obs',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Key Discrepancies Noted</label><textarea value={data.discrepancies||''} onChange={e=>set('discrepancies',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Sanction Compliance</label><select value={data.sanction_compliance||''} onChange={e=>set('sanction_compliance',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Fully Compliant</option><option>Minor Deviations</option><option>Significant Deviations</option><option>Non-Compliant</option></select></div>
       </div></div>
-      <div className="rpt-section"><div className="rpt-sh">Section 7 — Rating & Certificate</div><div className="rpt-body">
-        <label style={{marginBottom:10}}>Overall Rating (1 = Best, 6 = Unsatisfactory)</label>
+
+      <div className="rpt-section"><div className="rpt-sh">Section 7 — Rating & Certification</div><div className="rpt-body">
+        <label style={{marginBottom:10,display:'block'}}>Overall Rating (1 = Best, 6 = Unsatisfactory)</label>
         <div className="rating-grid" style={{marginBottom:16}}>{ratings.map(r=>(<div key={r.r} className={`r-btn ${data.rating===r.r?'selected':''}`} onClick={()=>!readOnly&&set('rating',r.r)}><div style={{fontSize:20,fontWeight:800,color:data.rating===r.r?'var(--blue)':'var(--gray)'}}>{r.r}</div><div style={{fontSize:11,fontWeight:700,marginTop:2}}>{r.label}</div><div style={{fontSize:10,color:'var(--gray)',marginTop:1}}>{r.desc}</div></div>))}</div>
         <div className="fg"><label>Recommendations to Bank</label><textarea value={data.recommendations||''} onChange={e=>set('recommendations',e.target.value)} disabled={readOnly}/></div>
         <div className="fg2"><div className="fg"><label>CA Name</label><input value={data.ca_name||''} onChange={e=>set('ca_name',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>ICAI Membership No.</label><input value={data.icai_no||''} onChange={e=>set('icai_no',e.target.value)} disabled={readOnly}/></div></div>
@@ -400,7 +596,11 @@ function ReportForm({audit,onClose,onRefresh}){
         <div className="fg2"><div className="fg"><label>Date of Report</label><input type="date" value={data.report_date||''} onChange={e=>set('report_date',e.target.value)} disabled={readOnly}/></div></div>
         <div className="fg"><label>Auditor's Certificate</label><textarea value={data.certificate||''} onChange={e=>set('certificate',e.target.value)} disabled={readOnly} rows={3} placeholder="I certify that I have physically verified the stocks and books of the above borrower…"/></div>
       </div></div>
-      {!readOnly&&<div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}><button className="btn btn-o" onClick={()=>save(false)} disabled={saving}>💾 Save Draft</button><button className="btn btn-g" onClick={()=>save(true)} disabled={saving}>🏁 Finalize & Submit</button></div>}
+      {!readOnly&&<div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
+        <button className="btn btn-o" onClick={printReport} style={{background:'#7c3aed',color:'#fff',border:'none'}}>Print / PDF</button>
+        <button className="btn btn-o" onClick={()=>save(false)} disabled={saving}>Save Draft</button>
+        <button className="btn btn-g" onClick={()=>save(true)} disabled={saving}>Finalize & Submit</button>
+      </div>}
     </div>
   );
 }
@@ -738,13 +938,16 @@ function AuthScreen({onLogin}){
 }
 
 // ── CA PUBLIC PROFILE PAGE (in-app) ──────────────────────────────────────────
-function CAPublicProfilePage({user}){
+function CAPublicProfilePage({user,setPage}){
   const[profile,setProfile]=useState(null);
+  const[freshUser,setFreshUser]=useState(user);
   const appUrl=(window.location.origin);
-  const profileUrl=user.icai_no?`${appUrl}/profile/ca/${user.icai_no}`:null;
-  useEffect(()=>{if(user.icai_no)API.get(`/api/profile/ca/${user.icai_no}`).then(setProfile);},[user.icai_no]);
+  useEffect(()=>{API.get('/api/auth/me').then(u=>{if(u&&u.id)setFreshUser(u);});},[]);
+  const icai=freshUser.icai_no||user.icai_no;
+  const profileUrl=icai?`${appUrl}/profile/ca/${icai}`:null;
+  useEffect(()=>{if(icai)API.get(`/api/profile/ca/${icai}`).then(setProfile);},[icai]);
   function copyLink(){if(profileUrl){navigator.clipboard.writeText(profileUrl);alert('Profile link copied! Share it with bankers to showcase your credentials.');}}
-  if(!user.icai_no)return(<div className="page"><div className="card" style={{padding:24,textAlign:'center'}}><div style={{fontSize:32,marginBottom:12}}>🌟</div><div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Complete Your Profile First</div><div style={{color:'var(--gray)',marginBottom:16}}>Add your ICAI Membership Number in Settings to activate your public profile.</div><button className="btn btn-p" onClick={()=>{}}>Go to Settings →</button></div></div>);
+  if(!user.icai_no)return(<div className="page"><div className="card" style={{padding:24,textAlign:'center'}}><div style={{fontSize:32,marginBottom:12}}>🌟</div><div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Complete Your Profile First</div><div style={{color:'var(--gray)',marginBottom:16}}>Add your ICAI Membership Number in Settings to activate your public profile.</div><button className="btn btn-p" onClick={()=>setPage('profile')}>Go to Settings →</button></div></div>);
   if(!profile)return(<div className="page"><div style={{color:'var(--gray)',padding:24}}>Loading your profile…</div></div>);
   const stars=(n)=>n?'★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n)):'—';
   return(<div className="page">
@@ -755,12 +958,12 @@ function CAPublicProfilePage({user}){
             <div style={{fontSize:13,opacity:.85}}>{profile.firm_name||'Independent CA'} {profile.icai_no&&'· ICAI '+profile.icai_no}</div>
             <div style={{fontSize:13,opacity:.85}}>{profile.city||''}</div>
           </div>
-          {profile.avg_rating&&<div style={{background:'rgba(255,255,255,.2)',borderRadius:12,padding:'8px 16px',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800}}>★ {profile.avg_rating}</div><div style={{fontSize:11,opacity:.8}}>{profile.rating_count} ratings</div></div>}
+          {profile.avg_rating&&<div style={{background:'rgba(255,255,255,.2)',borderRadius:12,padding:'8px 16px',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800}}>★ {profile.avg_rating}</div><div style={{fontSize:11,opacity:.8}}>{profile.total_ratings||0} ratings</div></div>}
         </div>
       </div>
       <div style={{padding:24}}>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:12,marginBottom:24}}>
-          {[{v:profile.completed_audits||0,l:'Audits Completed'},{v:profile.total_audits||0,l:'Total Assigned'},{v:profile.avg_rating?stars(profile.avg_rating)+' '+profile.avg_rating+'/5':'No ratings',l:'Avg Rating'},{v:profile.total_exposure_cr?'₹'+profile.total_exposure_cr+'Cr':'—',l:'Exposure Audited'},{v:profile.on_time_rate!==null?profile.on_time_rate+'%':'—',l:'On-Time Rate'},{v:profile.banks_worked_with||0,l:'Banks Served'}].map(s=>(
+          {[{v:profile.finalized_audits||0,l:'Audits Completed'},{v:profile.total_audits||0,l:'Total Assigned'},{v:profile.avg_rating?stars(profile.avg_rating)+' '+profile.avg_rating+'/5':'No ratings',l:'Avg Rating'},{v:profile.total_exposure_cr?'₹'+profile.total_exposure_cr+'Cr':'—',l:'Exposure Audited'},{v:profile.on_time_rate!==null?profile.on_time_rate+'%':'—',l:'On-Time Rate'},{v:profile.banks_worked_with||0,l:'Banks Served'}].map(s=>(
             <div key={s.l} style={{background:'#f8fafc',borderRadius:12,padding:14,textAlign:'center'}}>
               <div style={{fontSize:20,fontWeight:800,color:'#1d4ed8'}}>{s.v}</div>
               <div style={{fontSize:11,color:'var(--gray)',marginTop:2}}>{s.l}</div>
@@ -818,7 +1021,7 @@ function App(){
       {page==='dashboard'&&isBorrower&&<BorrowerPortal setPanel={setPanel}/>}
       {page==='invoices'&&isCA&&<CAInvoices/>}
       {page==='profile'&&<ProfilePage/>}
-      {page==='ca-profile'&&isCA&&<CAPublicProfilePage user={user}/>}
+      {page==='ca-profile'&&isCA&&<CAPublicProfilePage user={user} setPage={setPage}/>}
     </div>
     {showReferral&&<ReferralModal onClose={()=>setShowReferral(false)}/>}
     {panel&&<AuditPanel auditId={panel} onClose={()=>setPanel(null)} onRefresh={()=>{}}/>}
