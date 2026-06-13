@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AuditFlow — India's Smart Stock Audit Platform for Banks & CAs</title>
+<meta name="description" content="AuditFlow digitises the entire bank stock audit lifecycle — from mandate to RBI-compliant report — cutting turnaround from weeks to days."/>
+<style>
+  :root {
+    --blue: #1a56db;
+    --blue-dark: #1e429f;
+    --blue-light: #ebf5ff;
+    --green: #057a55;
+    --green-light: #f3faf7;
+    --orange: #d03801;
+    --orange-light: #fff8f1;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; color: var(--gray-800); line-height: 1.6; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: #fff; border-bottom: 1px solid var(--gray-200);
+    padding: 0 5%;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 1.3rem; font-weight: 700; color: var(--blue-dark); }
+  .logo-icon { width: 36px; height: 36px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .logo-icon svg { width: 22px; height: 22px; fill: #fff; }
+  nav ul { list-style: none; display: flex; gap: 32px; }
+  nav ul li a { font-size: 0.9rem; color: var(--gray-700); font-weight: 500; }
+  nav ul li a:hover { color: var(--blue); text-decoration: none; }
+  .nav-cta { background: var(--blue); color: #fff !important; padding: 8px 20px; border-radius: 6px; font-weight: 600 !important; }
+  .nav-cta:hover { background: var(--blue-dark); }
+
+  /* HERO */
+  .hero {
+    background: linear-gradient(135deg, #0f2057 0%, #1a56db 60%, #2563eb 100%);
+    color: #fff;
+    padding: 90px 5% 80px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 5px 16px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 24px;
+    text-transform: uppercase;
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 20px;
+    max-width: 820px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .hero h1 span { color: #93c5fd; }
+  .hero p {
+    font-size: 1.15rem;
+    color: rgba(255,255,255,0.85);
+    max-width: 600px;
+    margin: 0 auto 36px;
+  }
+  .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary {
+    background: #fff; color: var(--blue-dark);
+    padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 1rem;
+    border: none; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+    display: inline-block;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); text-decoration: none; color: var(--blue-dark); }
+  .btn-outline {
+    background: transparent; color: #fff;
+    padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 1rem;
+    border: 2px solid rgba(255,255,255,0.6); cursor: pointer; transition: all 0.15s;
+    display: inline-block;
+  }
+  .btn-outline:hover { background: rgba(255,255,255,0.1); text-decoration: none; color: #fff; }
+
+  /* STATS STRIP */
+  .stats-strip {
+    background: var(--gray-900);
+    padding: 28px 5%;
+    display: flex; justify-content: center; gap: 60px; flex-wrap: wrap;
+  }
+  .stat { text-align: center; }
+  .stat-num { font-size: 2rem; font-weight: 800; color: #fff; }
+  .stat-num span { color: #60a5fa; }
+  .stat-label { font-size: 0.8rem; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+  /* PROBLEM SECTION */
+  .section { padding: 80px 5%; }
+  .section-label { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--blue); margin-bottom: 12px; }
+  .section-title { font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--gray-900); line-height: 1.2; }
+  .section-sub { font-size: 1.05rem; color: var(--gray-600); margin-top: 12px; max-width: 640px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+  @media(max-width:768px){ .two-col { grid-template-columns: 1fr; } nav ul { display: none; } }
+
+  .pain-list { list-style: none; margin-top: 32px; display: flex; flex-direction: column; gap: 18px; }
+  .pain-list li { display: flex; align-items: flex-start; gap: 14px; }
+  .pain-icon { width: 36px; height: 36px; border-radius: 8px; background: #fee2e2; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; }
+  .pain-text strong { display: block; color: var(--gray-900); font-weight: 600; }
+  .pain-text span { font-size: 0.9rem; color: var(--gray-600); }
+
+  .phone-mockup {
+    background: var(--gray-900);
+    border-radius: 20px;
+    padding: 28px 24px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    line-height: 1.8;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .phone-mockup::before {
+    content: '● ● ●';
+    display: block;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 16px;
+    font-family: system-ui;
+    font-size: 0.7rem;
+  }
+  .chat-msg { margin-bottom: 10px; }
+  .chat-msg.them { color: #93c5fd; }
+  .chat-msg.me { color: #86efac; text-align: right; }
+  .chat-msg.sys { color: rgba(255,255,255,0.4); text-align: center; font-size: 0.72rem; }
+
+  /* HOW IT WORKS */
+  .bg-light { background: var(--gray-50); }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 32px; margin-top: 48px; }
+  .step { text-align: center; }
+  .step-num { width: 52px; height: 52px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+  .step h3 { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+  .step p { font-size: 0.88rem; color: var(--gray-600); }
+  .step-arrow { display: flex; align-items: center; justify-content: center; color: var(--gray-200); font-size: 2rem; padding-top: 16px; }
+
+  /* FEATURES */
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; margin-top: 48px; }
+  .feature-card {
+    background: #fff; border: 1px solid var(--gray-200); border-radius: 16px; padding: 28px;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .feature-card:hover { box-shadow: 0 8px 32px rgba(26,86,219,0.12); transform: translateY(-4px); }
+  .feature-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; font-size: 1.5rem; }
+  .fi-blue { background: var(--blue-light); }
+  .fi-green { background: var(--green-light); }
+  .fi-orange { background: var(--orange-light); }
+  .fi-purple { background: #f5f3ff; }
+  .fi-teal { background: #f0fdfa; }
+  .fi-yellow { background: #fefce8; }
+  .feature-card h3 { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin-bottom: 10px; }
+  .feature-card p { font-size: 0.88rem; color: var(--gray-600); line-height: 1.6; }
+  .feature-card ul { list-style: none; margin-top: 12px; }
+  .feature-card ul li { font-size: 0.85rem; color: var(--gray-600); padding: 3px 0; padding-left: 16px; position: relative; }
+  .feature-card ul li::before { content: '✓'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+
+  /* AUDIENCE TABS */
+  .audience-section { padding: 80px 5%; background: #fff; }
+  .audience-tabs { display: flex; gap: 4px; background: var(--gray-100); border-radius: 12px; padding: 4px; width: fit-content; margin: 32px auto 0; }
+  .audience-tab { padding: 10px 24px; border-radius: 9px; font-weight: 600; font-size: 0.9rem; cursor: pointer; border: none; background: transparent; color: var(--gray-600); transition: all 0.2s; }
+  .audience-tab.active { background: #fff; color: var(--blue-dark); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .audience-content { display: none; margin-top: 40px; }
+  .audience-content.active { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+  @media(max-width:768px){ .audience-content.active { grid-template-columns: 1fr; } }
+  .audience-benefits { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+  .audience-benefits li { display: flex; gap: 14px; align-items: flex-start; }
+  .benefit-check { width: 24px; height: 24px; border-radius: 50%; background: var(--green); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .benefit-text strong { display: block; font-weight: 600; color: var(--gray-900); }
+  .benefit-text span { font-size: 0.85rem; color: var(--gray-600); }
+  .audience-visual {
+    background: linear-gradient(135deg, var(--blue-light) 0%, #dbeafe 100%);
+    border-radius: 20px;
+    padding: 36px;
+    min-height: 280px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .metric-cards { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+  .metric-card { background: #fff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .metric-card-label { font-size: 0.78rem; color: var(--gray-600); font-weight: 500; }
+  .metric-card-value { font-size: 1.4rem; font-weight: 800; color: var(--gray-900); margin-top: 2px; }
+  .metric-card-sub { font-size: 0.75rem; color: var(--green); font-weight: 600; margin-top: 2px; }
+  .metric-card-bar { height: 6px; background: var(--gray-100); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .metric-card-fill { height: 100%; border-radius: 3px; background: var(--blue); }
+
+  /* AI SECTION */
+  .ai-section { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color: #fff; padding: 80px 5%; }
+  .ai-section .section-label { color: #a78bfa; }
+  .ai-section .section-title { color: #fff; }
+  .ai-section .section-sub { color: rgba(255,255,255,0.7); }
+  .ai-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-top: 48px; }
+  .ai-card { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 24px; }
+  .ai-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 10px; }
+  .ai-card p { font-size: 0.85rem; color: rgba(255,255,255,0.65); line-height: 1.6; }
+  .ai-badge { display: inline-block; background: #7c3aed; color: #fff; font-size: 0.72rem; font-weight: 700; padding: 2px 10px; border-radius: 20px; margin-bottom: 10px; }
+
+  /* COMPLIANCE */
+  .compliance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 40px; }
+  .compliance-item { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 20px; text-align: center; }
+  .compliance-item .icon { font-size: 2rem; margin-bottom: 10px; }
+  .compliance-item h4 { font-size: 0.9rem; font-weight: 700; color: var(--gray-900); margin-bottom: 6px; }
+  .compliance-item p { font-size: 0.8rem; color: var(--gray-600); }
+
+  /* TESTIMONIAL */
+  .testimonial-section { background: var(--blue-light); padding: 80px 5%; text-align: center; }
+  .testimonial-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-top: 48px; max-width: 1000px; margin-left: auto; margin-right: auto; }
+  .testimonial-card { background: #fff; border-radius: 16px; padding: 28px; text-align: left; box-shadow: 0 2px 12px rgba(26,86,219,0.08); }
+  .stars { color: #f59e0b; font-size: 1rem; margin-bottom: 14px; }
+  .testimonial-card p { font-size: 0.92rem; color: var(--gray-700); line-height: 1.7; font-style: italic; margin-bottom: 20px; }
+  .testimonial-author { display: flex; align-items: center; gap: 12px; }
+  .author-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--blue); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; flex-shrink: 0; }
+  .author-name { font-weight: 700; color: var(--gray-900); font-size: 0.9rem; }
+  .author-role { font-size: 0.8rem; color: var(--gray-600); }
+
+  /* PRICING */
+  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-top: 48px; max-width: 960px; margin-left: auto; margin-right: auto; }
+  .pricing-card { background: #fff; border: 2px solid var(--gray-200); border-radius: 20px; padding: 32px; }
+  .pricing-card.featured { border-color: var(--blue); position: relative; }
+  .pricing-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--blue); color: #fff; padding: 4px 18px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+  .pricing-name { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-600); margin-bottom: 8px; }
+  .pricing-price { font-size: 2.2rem; font-weight: 800; color: var(--gray-900); }
+  .pricing-price span { font-size: 1rem; font-weight: 500; color: var(--gray-600); }
+  .pricing-desc { font-size: 0.85rem; color: var(--gray-600); margin: 10px 0 24px; }
+  .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+  .pricing-features li { font-size: 0.88rem; color: var(--gray-700); padding-left: 22px; position: relative; }
+  .pricing-features li::before { content: '✓'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pricing-features li.no::before { content: '✕'; color: var(--gray-300); }
+  .pricing-features li.no { color: var(--gray-400); }
+  .btn-plan { display: block; text-align: center; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.15s; }
+  .btn-plan-outline { border: 2px solid var(--blue); color: var(--blue); }
+  .btn-plan-outline:hover { background: var(--blue); color: #fff; text-decoration: none; }
+  .btn-plan-filled { background: var(--blue); color: #fff; border: 2px solid var(--blue); }
+  .btn-plan-filled:hover { background: var(--blue-dark); text-decoration: none; color: #fff; }
+
+  /* CTA FINAL */
+  .cta-final { background: linear-gradient(135deg, #1a56db 0%, #7c3aed 100%); color: #fff; padding: 90px 5%; text-align: center; }
+  .cta-final h2 { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 800; margin-bottom: 16px; }
+  .cta-final p { font-size: 1.1rem; color: rgba(255,255,255,0.85); margin-bottom: 36px; max-width: 560px; margin-left: auto; margin-right: auto; }
+  .cta-final-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn-white { background: #fff; color: var(--blue-dark); padding: 14px 36px; border-radius: 8px; font-weight: 700; font-size: 1rem; display: inline-block; transition: transform 0.15s; }
+  .btn-white:hover { transform: translateY(-2px); text-decoration: none; color: var(--blue-dark); }
+  .btn-ghost { background: rgba(255,255,255,0.1); color: #fff; padding: 14px 36px; border-radius: 8px; font-weight: 600; font-size: 1rem; border: 2px solid rgba(255,255,255,0.4); display: inline-block; }
+  .btn-ghost:hover { background: rgba(255,255,255,0.2); text-decoration: none; color: #fff; }
+
+  /* FOOTER */
+  footer { background: var(--gray-900); color: rgba(255,255,255,0.6); padding: 40px 5%; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 20px; }
+  footer .logo { color: #fff; }
+  footer p { font-size: 0.85rem; }
+
+  /* SCROLL ANIMATION */
+  .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.5s, transform 0.5s; }
+  .fade-in.visible { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+    </div>
+    AuditFlow
+  </div>
+  <ul>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how-it-works">How it Works</a></li>
+    <li><a href="#for-you">For You</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="/index.html" class="nav-cta">Get Started →</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">🇮🇳 Built for Indian Banking &amp; Finance</div>
+  <h1>Stock Audits in <span>Days</span>,<br/>Not Weeks. Compliant. Digital.</h1>
+  <p>AuditFlow connects Banks, Chartered Accountants, and Borrowers on one intelligent platform — replacing WhatsApp chains and Excel sheets with RBI-compliant, AI-powered audit workflows.</p>
+  <div class="hero-buttons">
+    <a href="/index.html" class="btn-primary">Start Free Trial →</a>
+    <a href="#how-it-works" class="btn-outline">See How It Works</a>
+  </div>
+</section>
+
+<!-- STATS STRIP -->
+<div class="stats-strip">
+  <div class="stat"><div class="stat-num">10<span>x</span></div><div class="stat-label">Faster Turnaround</div></div>
+  <div class="stat"><div class="stat-num">100<span>%</span></div><div class="stat-label">RBI Format Compliance</div></div>
+  <div class="stat"><div class="stat-num">3<span>+</span></div><div class="stat-label">Stakeholders, One Platform</div></div>
+  <div class="stat"><div class="stat-num">0</div><div class="stat-label">Manual Report Typing</div></div>
+</div>
+
+<!-- PROBLEM -->
+<section class="section">
+  <div class="two-col">
+    <div class="fade-in">
+      <div class="section-label">The Problem</div>
+      <h2 class="section-title">Stock Audits Are Stuck in 2005</h2>
+      <p class="section-sub">Every year, Indian banks spend thousands of hours coordinating stock audits over WhatsApp, email, and Excel — with no accountability, no trail, and no standardisation.</p>
+      <ul class="pain-list">
+        <li>
+          <div class="pain-icon">📱</div>
+          <div class="pain-text">
+            <strong>WhatsApp Chaos</strong>
+            <span>Mandates, documents, and approvals buried in chat threads across hundreds of borrowers.</span>
+          </div>
+        </li>
+        <li>
+          <div class="pain-icon">📋</div>
+          <div class="pain-text">
+            <strong>Manual Report Typing</strong>
+            <span>CAs retype stock statements into Word docs. One typo can misrepresent crores of inventory.</span>
+          </div>
+        </li>
+        <li>
+          <div class="pain-icon">⏳</div>
+          <div class="pain-text">
+            <strong>4–8 Week Turnaround</strong>
+            <span>Banks wait weeks for final reports. Fraud window stays open. Credit decisions are delayed.</span>
+          </div>
+        </li>
+        <li>
+          <div class="pain-icon">❌</div>
+          <div class="pain-text">
+            <strong>No Drawing Power Checks</strong>
+            <span>Borrowers inflate DP. Without automated calculations, overdrawn accounts go undetected.</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+    <div class="fade-in">
+      <div class="phone-mockup">
+        <div class="chat-msg them">🏦 Bank Manager: CA sir, when is the<br/>&nbsp;&nbsp;&nbsp;Sharma Traders report coming?</div>
+        <div class="chat-msg me">CA: Sir forwarding Excel now. The<br/>&nbsp;&nbsp;&nbsp;borrower sent wrong format again 🙏</div>
+        <div class="chat-msg them">🏦 Bank Manager: Please resend as PDF.<br/>&nbsp;&nbsp;&nbsp;And DP calculation kahan hai?</div>
+        <div class="chat-msg me">CA: Calculating... will send by EOD</div>
+        <div class="chat-msg them">🏦 Bank Manager: We've been waiting<br/>&nbsp;&nbsp;&nbsp;3 weeks for this report 😤</div>
+        <div class="chat-msg sys">— 6 days later —</div>
+        <div class="chat-msg me">CA: Sir, please find attached DP<br/>&nbsp;&nbsp;&nbsp;report (v7_FINAL_final2).xlsx</div>
+        <div class="chat-msg sys" style="color:#ef4444;margin-top:16px;">📍 This is what AuditFlow replaces.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section bg-light" id="how-it-works">
+  <div style="text-align:center">
+    <div class="section-label">How It Works</div>
+    <h2 class="section-title">From Mandate to Report in 4 Simple Steps</h2>
+    <p class="section-sub" style="margin:12px auto 0">One connected workflow for every party — no more information silos.</p>
+  </div>
+  <div class="steps">
+    <div class="step fade-in">
+      <div class="step-num">1</div>
+      <h3>Bank Issues Mandate</h3>
+      <p>Branch manager creates audit mandate, assigns a CA from the verified panel, and notifies the borrower — all in 2 minutes.</p>
+    </div>
+    <div class="step fade-in">
+      <div class="step-num">2</div>
+      <h3>Borrower Submits Documents</h3>
+      <p>Borrower uploads stock statements, debtors list, and financial docs through their secure portal. No email attachments, no lost files.</p>
+    </div>
+    <div class="step fade-in">
+      <div class="step-num">3</div>
+      <h3>CA Reviews with AI Assist</h3>
+      <p>AI extracts data from uploaded documents and pre-fills the audit form. CA verifies, computes Drawing Power, and flags discrepancies.</p>
+    </div>
+    <div class="step fade-in">
+      <div class="step-num">4</div>
+      <h3>RBI Report Auto-Generated</h3>
+      <p>One click generates a print-ready, RBI-format report with all computations. Bank downloads and files. Audit complete.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div style="text-align:center; margin-bottom: 0">
+    <div class="section-label">Features</div>
+    <h2 class="section-title">Everything You Need. Nothing You Don't.</h2>
+  </div>
+  <div class="features-grid">
+
+    <div class="feature-card fade-in">
+      <div class="feature-icon fi-blue">📊</div>
+      <h3>Automated Drawing Power Calculator</h3>
+      <p>Enter stock and debtor figures once. AuditFlow instantly computes eligible stocks, eligible debtors, and final DP — with configurable margin percentages.</p>
+      <ul>
+        <li>Configurable stock &amp; debtor margin %</li>
+        <li>Auto-deducts creditors</li>
+        <li>DP variance from borrower declaration highlighted</li>
+        <li>Capped at sanctioned limit automatically</li>
+      </ul>
+    </div>
+
+    <div class="feature-card fade-in">
+      <div class="feature-icon fi-green">🤖</div>
+      <h3>AI Document Analysis</h3>
+      <p>Upload a stock statement, bank statement, or debtor list — PDF or image. AI reads and pre-fills the audit form fields, saving hours of manual entry.</p>
+      <ul>
+        <li>Supports PDFs, scanned images &amp; Excel</li>
+        <li>7 document types auto-recognised</li>
+        <li>Extracts figures, dates &amp; totals</li>
+        <li>Shows count of fields populated</li>
+      </ul>
+    </div>
+
+    <div class="feature-card fade-in">
+      <div class="feature-icon fi-orange">📄</div>
+      <h3>RBI-Format Report Generation</h3>
+      <p>Generate a fully formatted, print-ready audit report with one click. Includes stock analysis, aging analysis, DP computation, and CA observations.</p>
+      <ul>
+        <li>RBI-compliant stock audit format</li>
+        <li>Auto-filled from form data</li>
+        <li>PDF export &amp; print ready</li>
+        <li>Insurance adequacy warnings</li>
+      </ul>
+    </div>
+
+    <div class="feature-card fade-in">
+      <div class="feature-icon fi-purple">🔔</div>
+      <h3>Real-Time Tracking &amp; Notifications</h3>
+      <p>Every stakeholder sees live audit status — from mandate issued to report filed. Automatic email notifications at each milestone.</p>
+      <ul>
+        <li>Live status dashboard for banks</li>
+        <li>Email alerts to CA &amp; borrower</li>
+        <li>Full audit trail &amp; timeline</li>
+        <li>No more "Sir, status kya hai?" calls</li>
+      </ul>
+    </div>
+
+    <div class="feature-card fade-in">
+      <div class="feature-icon fi-teal">⭐</div>
+      <h3>CA Rating &amp; Quality Control</h3>
+      <p>Banks rate CA performance after each audit. Build a quality-assured panel. Good CAs get more mandates. Poor performers are flagged automatically.</p>
+      <ul>
+        <li>5-star rating system per audit</li>
+        <li>Public CA profile with track record</li>
+        <li>ICAI number verification</li>
+        <li>Finalized audits counter</li>
+      </ul>
+    </div>
+
+    <div class="feature-card fade-in">
+      <div class="feature-icon fi-yellow">💰</div>
+      <h3>Invoice &amp; Fee Management</h3>
+      <p>CAs raise invoices directly on the platform. Banks approve and mark payment. No separate billing cycles, no disputed fees.</p>
+      <ul>
+        <li>CA creates invoice in one click</li>
+        <li>Bank marks payment received</li>
+        <li>Full fee history per CA</li>
+        <li>Referral program for CA onboarding</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- FOR WHO -->
+<section class="audience-section" id="for-you">
+  <div style="text-align:center">
+    <div class="section-label">Designed For</div>
+    <h2 class="section-title">Built for Every Party in the Audit Ecosystem</h2>
+  </div>
+  <div class="audience-tabs" id="audienceTabs">
+    <button class="audience-tab active" onclick="switchTab('bank')">🏦 Banks &amp; NBFCs</button>
+    <button class="audience-tab" onclick="switchTab('ca')">📋 Chartered Accountants</button>
+    <button class="audience-tab" onclick="switchTab('borrower')">🏢 Borrowers</button>
+  </div>
+
+  <!-- BANK -->
+  <div class="audience-content active" id="tab-bank">
+    <ul class="audience-benefits">
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Centralised Mandate Management</strong>
+          <span>Issue, track and close all stock audit mandates across branches from one dashboard. No more Excel trackers.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Instant DP Discrepancy Alerts</strong>
+          <span>Auto-detect when borrower-declared DP doesn't match audit-computed DP. Prevent overdraft fraud before it happens.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Verified CA Panel</strong>
+          <span>Assign from pre-verified, ICAI-registered CAs. Rate them after each audit to maintain panel quality.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Audit Analytics Dashboard</strong>
+          <span>See audit volumes, average turnaround, pending audits, and top CAs — at a glance.</span>
+        </div>
+      </li>
+    </ul>
+    <div class="audience-visual">
+      <div class="metric-cards">
+        <div class="metric-card">
+          <div class="metric-card-label">Average Report Turnaround</div>
+          <div class="metric-card-value">3.2 <span style="font-size:1rem;color:#6b7280">days</span></div>
+          <div class="metric-card-sub">↓ 85% vs. manual process</div>
+          <div class="metric-card-bar"><div class="metric-card-fill" style="width:15%; background:#10b981;"></div></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">DP Variance Detected (this quarter)</div>
+          <div class="metric-card-value">₹2.4 Cr</div>
+          <div class="metric-card-sub">7 borrowers flagged automatically</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Audits Completed</div>
+          <div class="metric-card-value">142</div>
+          <div class="metric-card-sub">↑ 12 pending · 0 overdue</div>
+          <div class="metric-card-bar"><div class="metric-card-fill" style="width:92%;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CA -->
+  <div class="audience-content" id="tab-ca">
+    <ul class="audience-benefits">
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>More Mandates, Less Friction</strong>
+          <span>Get discovered by multiple banks. Accept mandates from your dashboard. No more cold-calling relationship managers.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>AI-Powered Field Population</strong>
+          <span>Upload borrower's stock statement and watch the form fill itself. Spend time on professional judgment, not data entry.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>One-Click RBI Report</strong>
+          <span>No more reformatting in Word. Generate the full RBI-format audit report with calculations included, ready to submit.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Build Your Reputation</strong>
+          <span>Your public profile shows finalized audits and ratings. High-rated CAs get priority for new mandates.</span>
+        </div>
+      </li>
+    </ul>
+    <div class="audience-visual" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7);">
+      <div class="metric-cards">
+        <div class="metric-card">
+          <div class="metric-card-label">Your Active Mandates</div>
+          <div class="metric-card-value">8</div>
+          <div class="metric-card-sub">3 awaiting document upload</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Time Saved per Audit</div>
+          <div class="metric-card-value">~6 <span style="font-size:1rem;color:#6b7280">hours</span></div>
+          <div class="metric-card-sub">AI pre-fills, report auto-generates</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Your CA Rating</div>
+          <div class="metric-card-value">4.8 ⭐</div>
+          <div class="metric-card-sub">Top 10% on platform</div>
+          <div class="metric-card-bar"><div class="metric-card-fill" style="width:96%; background: #f59e0b;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BORROWER -->
+  <div class="audience-content" id="tab-borrower">
+    <ul class="audience-benefits">
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Simple Document Upload</strong>
+          <span>No more emailing Excel files or WhatsApp-ing photos. Upload your stock statement once via secure portal — done.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Know Your Drawing Power in Advance</strong>
+          <span>See your estimated DP before the CA submits. No surprises. Plan your working capital needs confidently.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>Faster Audit = Faster Credit</strong>
+          <span>Audit completes in days, not weeks. Your bank account gets unlocked faster. Cash flow improves immediately.</span>
+        </div>
+      </li>
+      <li>
+        <div class="benefit-check">✓</div>
+        <div class="benefit-text">
+          <strong>One Secure Portal</strong>
+          <span>All your audit history, documents, and communications in one place. Fully encrypted. Accessible on any device.</span>
+        </div>
+      </li>
+    </ul>
+    <div class="audience-visual" style="background: linear-gradient(135deg, #fff7ed, #fed7aa);">
+      <div class="metric-cards">
+        <div class="metric-card">
+          <div class="metric-card-label">Audit Status</div>
+          <div class="metric-card-value" style="color:#057a55;">✓ Complete</div>
+          <div class="metric-card-sub">Completed in 3 days · Report filed</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Drawing Power (Computed)</div>
+          <div class="metric-card-value">₹48.2 L</div>
+          <div class="metric-card-sub">vs ₹52 L declared — variance flagged</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Documents Uploaded</div>
+          <div class="metric-card-value">4 / 4</div>
+          <div class="metric-card-sub">All verified by CA</div>
+          <div class="metric-card-bar"><div class="metric-card-fill" style="width:100%; background:#d03801;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI SECTION -->
+<section class="ai-section">
+  <div style="text-align:center">
+    <div class="section-label">AI-Powered</div>
+    <h2 class="section-title">Powered by Large Language Models</h2>
+    <p class="section-sub" style="margin:12px auto 0; max-width:560px">AuditFlow embeds AI at every step — not as a gimmick, but as a genuine time-saver for CAs.</p>
+  </div>
+  <div class="ai-cards">
+    <div class="ai-card">
+      <div class="ai-badge">AI</div>
+      <h3>Document Intelligence</h3>
+      <p>Upload any stock statement, balance confirmation, or debtor list — PDF, image, or Excel. AI extracts figures and populates the audit form automatically, with human review before submission.</p>
+    </div>
+    <div class="ai-card">
+      <div class="ai-badge">AI</div>
+      <h3>Observations Auto-Draft</h3>
+      <p>Based on the data entered, AI drafts audit observations — insurance adequacy, stock quality concerns, aging patterns — which the CA reviews and refines before finalising.</p>
+    </div>
+    <div class="ai-card">
+      <div class="ai-badge">AI</div>
+      <h3>7 Document Types Supported</h3>
+      <p>Stock statements, bank statements, debtors list, insurance policies, GST returns, IT returns, and CMA data — each with a specialised extraction prompt tuned to its structure.</p>
+    </div>
+    <div class="ai-card">
+      <div class="ai-badge">AI</div>
+      <h3>PDF &amp; Scanned Document Support</h3>
+      <p>Even scanned PDFs work — AuditFlow converts pages to images client-side before sending to the vision model. No data leaves the browser until you're ready to upload.</p>
+    </div>
+  </div>
+</section>
+
+<!-- COMPLIANCE -->
+<section class="section bg-light">
+  <div style="text-align:center">
+    <div class="section-label">Compliance & Security</div>
+    <h2 class="section-title">Built to Banking Standards</h2>
+    <p class="section-sub" style="margin:12px auto 0; max-width:560px">AuditFlow isn't just convenient — it's built with the compliance rigour that Indian banking demands.</p>
+  </div>
+  <div class="compliance-grid">
+    <div class="compliance-item fade-in">
+      <div class="icon">🏛️</div>
+      <h4>RBI Format Reports</h4>
+      <p>Audit reports generated exactly as per RBI stock audit guidelines — no formatting adjustments needed.</p>
+    </div>
+    <div class="compliance-item fade-in">
+      <div class="icon">🔐</div>
+      <h4>JWT Authentication</h4>
+      <p>Every user session is secured with industry-standard JWT tokens. Role-based access for Bank / CA / Borrower.</p>
+    </div>
+    <div class="compliance-item fade-in">
+      <div class="icon">📜</div>
+      <h4>Full Audit Trail</h4>
+      <p>Every action — document upload, status change, report generation — is timestamped and recorded permanently.</p>
+    </div>
+    <div class="compliance-item fade-in">
+      <div class="icon">✅</div>
+      <h4>ICAI CA Verification</h4>
+      <p>CAs register with their ICAI membership number. Banks audit with confidence knowing credentials are verified.</p>
+    </div>
+    <div class="compliance-item fade-in">
+      <div class="icon">📊</div>
+      <h4>DP Computation Transparency</h4>
+      <p>Every Drawing Power figure shows the exact formula — eligible stock, debtors, creditors, margin % — fully auditable.</p>
+    </div>
+    <div class="compliance-item fade-in">
+      <div class="icon">📬</div>
+      <h4>AA Consent Framework</h4>
+      <p>Account Aggregator consent workflow built-in for future-ready data sharing between borrowers and banks.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS (illustrative) -->
+<section class="testimonial-section">
+  <div class="section-label" style="color:var(--blue)">Early Feedback</div>
+  <h2 class="section-title">What Finance Professionals Are Saying</h2>
+  <div class="testimonial-cards">
+    <div class="testimonial-card fade-in">
+      <div class="stars">★★★★★</div>
+      <p>"We used to spend 2 hours formatting the RBI report in Word. Now AuditFlow generates it in 10 seconds. The Drawing Power calculator alone is worth it — it catches discrepancies we used to miss."</p>
+      <div class="testimonial-author">
+        <div class="author-avatar">RK</div>
+        <div>
+          <div class="author-name">Rajesh Kumar, FCA</div>
+          <div class="author-role">Practicing CA, Mumbai</div>
+        </div>
+      </div>
+    </div>
+    <div class="testimonial-card fade-in">
+      <div class="stars">★★★★★</div>
+      <p>"Managing 40+ stock audits across branches was a nightmare on WhatsApp. AuditFlow gives us a single dashboard. The DP variance alerts alone helped us flag two overdrawn accounts last quarter."</p>
+      <div class="testimonial-author">
+        <div class="author-avatar">SP</div>
+        <div>
+          <div class="author-name">Sanjay Patel</div>
+          <div class="author-role">Branch Credit Head, Regional Bank</div>
+        </div>
+      </div>
+    </div>
+    <div class="testimonial-card fade-in">
+      <div class="stars">★★★★☆</div>
+      <p>"I used to email stock statements and wait days for a response. Now I upload on the portal, and within 3 days the audit is done and my drawing power is updated. Genuinely saves my business time."</p>
+      <div class="testimonial-author">
+        <div class="author-avatar">AM</div>
+        <div>
+          <div class="author-name">Anil Mehta</div>
+          <div class="author-role">Proprietor, Mehta Traders</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+  <div style="text-align:center">
+    <div class="section-label">Pricing</div>
+    <h2 class="section-title">Simple, Transparent Pricing</h2>
+    <p class="section-sub" style="margin:12px auto 0; max-width:560px">Start free. Scale as your audit volume grows. No setup fees, no hidden charges.</p>
+  </div>
+  <div class="pricing-grid">
+
+    <div class="pricing-card fade-in">
+      <div class="pricing-name">Starter</div>
+      <div class="pricing-price">Free</div>
+      <div class="pricing-desc">For CAs getting started on the platform</div>
+      <ul class="pricing-features">
+        <li>Up to 5 audits/month</li>
+        <li>RBI-format report generation</li>
+        <li>AI document analysis (10 uploads)</li>
+        <li>CA public profile</li>
+        <li class="no">Invoice management</li>
+        <li class="no">Priority mandate assignment</li>
+      </ul>
+      <a href="/index.html" class="btn-plan btn-plan-outline">Get Started Free</a>
+    </div>
+
+    <div class="pricing-card featured fade-in">
+      <div class="pricing-badge">Most Popular</div>
+      <div class="pricing-name">Professional</div>
+      <div class="pricing-price">₹2,999 <span>/ month</span></div>
+      <div class="pricing-desc">For CAs and banks running regular audits</div>
+      <ul class="pricing-features">
+        <li>Unlimited audits</li>
+        <li>RBI-format report generation</li>
+        <li>Unlimited AI document analysis</li>
+        <li>Invoice &amp; fee management</li>
+        <li>Priority mandate listing</li>
+        <li>Analytics dashboard</li>
+      </ul>
+      <a href="/index.html" class="btn-plan btn-plan-filled">Start 14-Day Trial</a>
+    </div>
+
+    <div class="pricing-card fade-in">
+      <div class="pricing-name">Enterprise</div>
+      <div class="pricing-price">Custom</div>
+      <div class="pricing-desc">For banks managing large CA panels</div>
+      <ul class="pricing-features">
+        <li>Unlimited branches &amp; users</li>
+        <li>White-labelled report header</li>
+        <li>API integration with core banking</li>
+        <li>Dedicated account manager</li>
+        <li>Custom compliance reports</li>
+        <li>SLA-backed uptime guarantee</li>
+      </ul>
+      <a href="mailto:hello@auditflow.in" class="btn-plan btn-plan-outline">Contact Sales</a>
+    </div>
+
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="cta-final">
+  <h2>Ready to Modernise Your Stock Audits?</h2>
+  <p>Join banks and CAs already using AuditFlow to cut turnaround time, eliminate errors, and stay RBI-compliant — automatically.</p>
+  <div class="cta-final-buttons">
+    <a href="/index.html" class="btn-white">Start Free Today →</a>
+    <a href="mailto:hello@auditflow.in" class="btn-ghost">Talk to Our Team</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+    </div>
+    AuditFlow
+  </div>
+  <p>© 2025 AuditFlow. Built for Indian Banking &amp; Finance.<br/>
+  RBI-compliant stock audit workflows for banks, CAs &amp; borrowers.</p>
+  <div style="font-size:0.85rem; display:flex; gap:20px;">
+    <a href="/index.html" style="color:rgba(255,255,255,0.6)">Login</a>
+    <a href="mailto:hello@auditflow.in" style="color:rgba(255,255,255,0.6)">Contact</a>
+  </div>
+</footer>
+
+<script>
+// Audience tab switcher
+function switchTab(tab) {
+  document.querySelectorAll('.audience-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.audience-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+
+// Scroll fade-in
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+</script>
+</body>
+</html>
