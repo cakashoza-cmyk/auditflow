@@ -570,7 +570,7 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
     generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
   });
 
-  const path2 = '/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey;
+  const path2 = '/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
   const options = {
     hostname: 'generativelanguage.googleapis.com',
     path: path2,
@@ -1033,7 +1033,7 @@ app.post('/api/audits/:id/ai-analyze', auth(), upload.single('file'), async func
   const https = require('https');
   const options = {
     hostname: 'generativelanguage.googleapis.com',
-    path: '/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
+    path: '/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
   };
