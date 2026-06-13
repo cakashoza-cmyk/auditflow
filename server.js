@@ -555,16 +555,51 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
   const audit = dbFindOne('audits', { id: req.params.id });
   if (!audit) return res.status(404).json({ error: 'Audit not found' });
   const promptText = cfg.prompt(audit) + '\nRespond ONLY with a valid JSON object. No markdown, no code fences.';
-  const base64Data = req.file.buffer.toString('base64');
-  const mimeType = req.file.mimetype || 'image/jpeg';
-  const groqPayload = JSON.stringify({
-    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    messages: [{ role: 'user', content: [
-      { type: 'text', text: promptText },
-      { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } }
-    ]}],
-    temperature: 0.1, max_tokens: 2048
-  });
+  const mimeType = req.file.mimetype || 'application/octet-stream';
+  const isImage = mimeType.startsWith('image/');
+  const isPdf = mimeType === 'application/pdf';
+  const isExcel = mimeType.includes('spreadsheet') || mimeType.includes('excel') || req.file.originalname.match(/\.xlsx?$/i);
+
+  async function buildGroqPayload() {
+    if (isImage) {
+      const base64Data = req.file.buffer.toString('base64');
+      return JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: promptText },
+          { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } }
+        ]}],
+        temperature: 0.1, max_tokens: 2048
+      });
+    }
+    let textContent = '';
+    if (isPdf) {
+      try {
+        const pdfParse = require('pdf-parse');
+        const parsed = await pdfParse(req.file.buffer);
+        textContent = parsed.text.slice(0, 12000);
+      } catch(e) { textContent = '[Could not extract PDF text: ' + e.message + ']'; }
+    } else if (isExcel) {
+      try {
+        const XLSX = require('xlsx');
+        const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+        textContent = wb.SheetNames.map(function(name) {
+          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name]);
+          return 'Sheet: ' + name + '\n' + csv;
+        }).join('\n\n').slice(0, 12000);
+      } catch(e) { textContent = '[Could not parse Excel: ' + e.message + ']'; }
+    } else {
+      textContent = req.file.buffer.toString('utf8', 0, 12000);
+    }
+    return JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: promptText + '\n\nDOCUMENT CONTENT:\n' + textContent }],
+      temperature: 0.1, max_tokens: 2048
+    });
+  }
+
+  let groqPayload;
+  try { groqPayload = await buildGroqPayload(); } catch(e) { return res.status(500).json({ error: 'File processing error: ' + e.message }); }
   const https = require('https');
   const groqReq = https.request({
     hostname: 'api.groq.com', path: '/openai/v1/chat/completions', method: 'POST',
