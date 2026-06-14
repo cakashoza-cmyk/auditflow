@@ -226,24 +226,42 @@ function RateModal({audit,onClose}){
 
 function ReferralModal({onClose}){
   const{user}=useAuth();
+  const isCA=user.role==='ca';
   const[name,setName]=useState('');
   const[email,setEmail]=useState('');
   const[msg,setMsg]=useState('');
   const[sending,setSending]=useState(false);
   const[done,setDone]=useState('');
   const[err,setErr]=useState('');
+  const[refLink,setRefLink]=useState('');
+  const[refCount,setRefCount]=useState(0);
+  const[refMonths,setRefMonths]=useState(12);
+  const[copied,setCopied]=useState(false);
+  useEffect(function(){if(isCA)API.get('/api/my/referral-link').then(function(r){if(r&&r.referral_link){setRefLink(r.referral_link);setRefCount(r.referral_count||0);setRefMonths(r.free_months||12);}});},[]);
+  function copyRefLink(){if(!refLink)return;navigator.clipboard.writeText(refLink).then(function(){setCopied(true);setTimeout(function(){setCopied(false);},2000);});}
   async function send(e){e.preventDefault();if(!name||!email)return;setSending(true);setErr('');
     const r=await API.post('/api/refer',{name,email,message:msg});setSending(false);
-    if(r.error){setErr(r.error);}else{setDone(r.status==='already_registered'?email+' is already on AuditFlow — invite sent!':'Invite sent to '+email+'! They\'ll receive login credentials.');setTimeout(onClose,2500);}
+    if(r.error){setErr(r.error);}else{setDone(r.status==='already_registered'?email+' is already on AuditFlow!':'Invite sent to '+email+'!');setTimeout(function(){setDone('');},2500);}
   }
-  return(<div className="remind-modal" onClick={onClose}><div className="remind-box" onClick={e=>e.stopPropagation()}>
-    <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>Invite to AuditFlow</div>
-    <div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>Invite a CA, banker, or borrower. They'll get an email with login credentials.</div>
+  return(<div className="remind-modal" onClick={onClose}><div className="remind-box" onClick={e=>e.stopPropagation()} style={{maxWidth:460}}>
+    <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>{isCA?'Invite & Earn':'Invite to AuditFlow'}</div>
+    <div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>{isCA?'Share your link — earn 2 extra free months for every CA who registers via it.':'Invite a CA, banker, or borrower. They\'ll get an email with login credentials.'}</div>
+    {isCA&&<div style={{marginBottom:18,background:'#f8fafc',border:'1.5px solid var(--gray-m)',borderRadius:10,padding:14}}>
+      <div style={{fontSize:11,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:8}}>Your Referral Link</div>
+      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
+        <div style={{flex:1,background:'#fff',border:'1px solid var(--gray-m)',borderRadius:6,padding:'6px 10px',fontSize:11,wordBreak:'break-all',color:'var(--gray)'}}>{refLink||'Loading…'}</div>
+        <button className="btn btn-p btn-sm" onClick={copyRefLink} style={{whiteSpace:'nowrap'}}>{copied?'✓ Copied!':'📋 Copy'}</button>
+      </div>
+      <div style={{fontSize:12,color:'var(--gray)'}}>
+        You've referred <strong>{refCount} CA{refCount!==1?'s':''}</strong> · Your plan: <strong style={{color:'var(--green)'}}>{refMonths} months free</strong>
+      </div>
+    </div>}
+    <div style={{fontSize:12,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:10}}>{isCA?'Or invite by email':'Send Email Invite'}</div>
     {done?<div className="alert alert-g">✅ {done}</div>:<form onSubmit={send}>
       {err&&<div className="alert" style={{background:'#fee2e2',color:'#dc2626',marginBottom:8}}>{err}</div>}
       <div className="fg"><label>Their Name</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Rajesh Kumar" required/></div>
       <div className="fg"><label>Their Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="rajesh@example.com" required/></div>
-      <div className="fg"><label>Personal Note (optional)</label><textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Hey, I've been using AuditFlow and thought you'd find it useful for your audits…" rows={2}/></div>
+      <div className="fg"><label>Personal Note (optional)</label><textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Hey, I've been using AuditFlow and thought you'd find it useful…" rows={2}/></div>
       <div style={{display:'flex',gap:8}}><button type="submit" className="btn btn-p" disabled={sending}>{sending?'Sending…':'📨 Send Invite'}</button><button type="button" className="btn btn-o" onClick={onClose}>Cancel</button></div>
     </form>}
   </div></div>);
@@ -608,11 +626,13 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
 function InvoiceSection({audit,onRefresh}){
   const{user}=useAuth();
   const[raising,setRaising]=useState(false);
+  const[reminding,setReminding]=useState(false);
   const inv=audit.invoice;
   async function raise(){setRaising(true);await API.post(`/api/audits/${audit.id}/invoice`,{});setRaising(false);onRefresh();}
   async function markPaid(){await API.put(`/api/invoices/${inv.id}/pay`,{});onRefresh();}
+  async function sendPayReminder(){setReminding(true);await API.post(`/api/audits/${audit.id}/remind`,{target:'borrower',message:'This is a reminder that your invoice is pending payment. Please arrange payment at your earliest convenience.'});setReminding(false);alert('Payment reminder sent to borrower!');}
   if(!inv){if(user.role!=='ca')return<div style={{padding:20,textAlign:'center',color:'var(--gray)'}}>Invoice not raised yet.</div>;return(<div style={{textAlign:'center',padding:28}}><div style={{fontSize:32,marginBottom:8}}>🧾</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:14}}>No invoice raised yet.</div>{audit.fee>0?<button className="btn btn-p" onClick={raise} disabled={raising}>{raising?'Raising…':'+ Raise Invoice to Bank'}</button>:<div className="alert alert-a">Fee not set by bank yet.</div>}</div>);}
-  return(<div><div style={{border:'1.5px solid var(--gray-m)',borderRadius:9,padding:18,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}><div><div style={{fontSize:12,color:'var(--gray)',fontWeight:600}}>{inv.id}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>Raised: {fmtDate(inv.raised_at)}</div></div>{payBadge(inv.status)}</div>{[['Borrower',audit.borrower_name],['Bank',audit.bank_name],['Base Fee',`₹${(inv.amount&&inv.amount.toLocaleString)('en-IN')}`],['GST 18%',`₹${(inv.gst&&inv.gst.toLocaleString)('en-IN')}`]].map(([l,v])=><div key={l} className="ir"><span className="il">{l}</span><span className="iv">{v}</span></div>)}<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderTop:'2px solid var(--gray-m)',marginTop:8}}><span style={{fontWeight:700}}>Total</span><span style={{fontSize:20,fontWeight:800}}>₹{(inv.total&&inv.total.toLocaleString)('en-IN')}</span></div></div>{inv.status==='paid'?<div className="alert alert-g">✅ Paid ₹{(inv.total&&inv.total.toLocaleString)('en-IN')} on {fmtDate(inv.paid_at)}</div>:inv.status==='sent'&&user.role==='banker'?<div style={{display:'flex',gap:8}}><button className="btn btn-g" onClick={markPaid}>Mark as Paid</button><button className="btn btn-o">Send Reminder</button></div>:<div className="alert alert-a">⏳ Invoice sent. Awaiting payment.</div>}</div>);
+  return(<div><div style={{border:'1.5px solid var(--gray-m)',borderRadius:9,padding:18,marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}><div><div style={{fontSize:12,color:'var(--gray)',fontWeight:600}}>{inv.id}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>Raised: {fmtDate(inv.raised_at)}</div></div>{payBadge(inv.status)}</div>{[['Borrower',audit.borrower_name],['Bank',audit.bank_name],['Base Fee',`₹${(inv.amount&&inv.amount.toLocaleString)('en-IN')}`],['GST 18%',`₹${(inv.gst&&inv.gst.toLocaleString)('en-IN')}`]].map(([l,v])=><div key={l} className="ir"><span className="il">{l}</span><span className="iv">{v}</span></div>)}<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderTop:'2px solid var(--gray-m)',marginTop:8}}><span style={{fontWeight:700}}>Total</span><span style={{fontSize:20,fontWeight:800}}>₹{(inv.total&&inv.total.toLocaleString)('en-IN')}</span></div></div>{inv.status==='paid'?<div className="alert alert-g">✅ Paid ₹{(inv.total&&inv.total.toLocaleString)('en-IN')} on {fmtDate(inv.paid_at)}</div>:inv.status==='sent'&&user.role==='banker'?<div style={{display:'flex',gap:8}}><button className="btn btn-g" onClick={markPaid}>Mark as Paid</button><button className="btn btn-o" onClick={sendPayReminder} disabled={reminding}>{reminding?'Sending…':'📤 Send Reminder'}</button></div>:<div className="alert alert-a">⏳ Invoice sent. Awaiting payment.</div>}</div>);
 }
 
 function AuditPanel({auditId,onClose,onRefresh:pr}){
@@ -695,10 +715,10 @@ function AuditTable({audits,setPanel,showCA=false,showBanker=false}){
 }
 
 // ── CA PORTAL ─────────────────────────────────────────────────────────────────
-function CADashboard({setPanel}){
+function CADashboard({setPanel,rfk}){
   const[audits,setAudits]=useState([]);
   const[filter,setFilter]=useState('all');
-  useEffect(()=>{API.get('/api/audits').then(setAudits);},[]);
+  useEffect(()=>{API.get('/api/audits').then(setAudits);},[rfk]);
   const nonCancelled=audits.filter(a=>a.stage!=='cancelled');
   const active=nonCancelled.filter(a=>a.stage!=='finalized');
   const urgent=nonCancelled.filter(a=>{const d=daysLeft(a.deadline);return d!==null&&d<=3&&a.stage!=='finalized';});
@@ -787,11 +807,11 @@ function InitiateAudit({onDone}){
 }
 
 // ── BANKER PORTAL ─────────────────────────────────────────────────────────────
-function BankerPortfolio({setPanel}){
+function BankerPortfolio({setPanel,rfk}){
   const[audits,setAudits]=useState([]);
   const[analytics,setAnalytics]=useState({});
   const[filter,setFilter]=useState('all');
-  useEffect(()=>{API.get('/api/audits').then(setAudits);API.get('/api/analytics').then(setAnalytics);},[]);
+  useEffect(()=>{API.get('/api/audits').then(setAudits);API.get('/api/analytics').then(setAnalytics);},[rfk]);
   const today=new Date().toISOString().split('T')[0];
   const filters=[
     {key:'all',label:'All',count:audits.length},
@@ -866,9 +886,9 @@ function ProfilePage(){
 }
 
 // ── BORROWER PORTAL ───────────────────────────────────────────────────────────
-function BorrowerPortal({setPanel}){
+function BorrowerPortal({setPanel,rfk}){
   const[audits,setAudits]=useState([]);
-  useEffect(()=>{API.get('/api/audits').then(setAudits);},[]);
+  useEffect(()=>{API.get('/api/audits').then(setAudits);},[rfk]);
   return(<div className="page"><div className="section-t mb-4">My Audits</div>
     {!audits.length&&<div className="card" style={{textAlign:'center',padding:32}}><div style={{fontSize:32,marginBottom:8}}>📋</div><div style={{color:'var(--gray)'}}>No audits yet. Your bank or CA will notify you when one is started.</div></div>}
     {audits.map(a=><div key={a.id} className="card mb-4" style={{cursor:'pointer'}} onClick={()=>setPanel(a.id)}>
@@ -1004,6 +1024,7 @@ function App(){
   const[panel,setPanel]=useState(null);
   const[initiating,setInitiating]=useState(false);
   const[showReferral,setShowReferral]=useState(false);
+  const[rfk,setRfk]=useState(0);
   useEffect(()=>{const t=localStorage.getItem('af_token');if(t){API.get('/api/auth/me').then(u=>{if((u&&u.id))setUser(u);setLoading(false);}).catch(()=>setLoading(false));}else setLoading(false);},[]);
   function logout(){localStorage.removeItem('af_token');setUser(null);setPage('dashboard');}
   if(loading)return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f0f4f8',color:'var(--gray)',fontSize:15}}>⚡ Loading AuditFlow…</div>;
@@ -1019,15 +1040,15 @@ function App(){
     </div>
     <div className="main">
       <div className="topbar"><div style={{fontWeight:700,color:'#374151'}}>{(nav.find(n=>n.key===page)||{label:'AuditFlow'}).label}</div><div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:12,color:'var(--gray)'}}>{user.email}</span><button className="btn btn-o btn-sm" onClick={logout}>Logout</button></div></div>
-      {page==='dashboard'&&isCA&&<CADashboard setPanel={setPanel}/>}
-      {page==='dashboard'&&isBanker&&<BankerPortfolio setPanel={setPanel}/>}
-      {page==='dashboard'&&isBorrower&&<BorrowerPortal setPanel={setPanel}/>}
+      {page==='dashboard'&&isCA&&<CADashboard setPanel={setPanel} rfk={rfk}/>}
+      {page==='dashboard'&&isBanker&&<BankerPortfolio setPanel={setPanel} rfk={rfk}/>}
+      {page==='dashboard'&&isBorrower&&<BorrowerPortal setPanel={setPanel} rfk={rfk}/>}
       {page==='invoices'&&isCA&&<CAInvoices/>}
       {page==='profile'&&<ProfilePage/>}
       {page==='ca-profile'&&isCA&&<CAPublicProfilePage user={user} setPage={setPage}/>}
     </div>
     {showReferral&&<ReferralModal onClose={()=>setShowReferral(false)}/>}
-    {panel&&<AuditPanel auditId={panel} onClose={()=>setPanel(null)} onRefresh={()=>{}}/>}
+    {panel&&<AuditPanel auditId={panel} onClose={()=>{setPanel(null);setRfk(function(p){return p+1;});}} onRefresh={()=>setRfk(function(p){return p+1;})}/>}
   </div></AuthCtx.Provider>);
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
