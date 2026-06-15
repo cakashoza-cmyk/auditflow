@@ -692,7 +692,7 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
         <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Activity Timeline</div>
         {(audit.timeline||[]).map((t,i)=>{const isWarn=t.note.includes('⚠');const isGreen=t.note.includes('approved')||t.note.includes('completed')||t.note.includes('finalized')||t.note.includes('uploaded');return(<div key={i} className="tl-item"><div className={`tl-dot ${isWarn?'r':isGreen?'g':''}` }/><div><div style={{fontSize:13,color:isWarn?'var(--red)':'inherit'}}>{t.note}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:1}}>{t.actor} · {fmtDate(t.created_at)}</div></div></div>);})}
       </div>}
-      {tab==='docs'&&<div><DriveLink audit={audit} user={user} onRefresh={load}/><DocList docs={audit.documents||[]} auditId={audit.id} auditStage={audit.stage} onRefresh={load} canUpload={canUpload&&audit.stage!=='finalized'&&!(user.role==='borrower'&&audit.drive_link)} user={user}/></div>}
+      {tab==='docs'&&<div><DriveLink audit={audit} user={user} onRefresh={load}/><DocList docs={audit.documents||[]} auditId={audit.id} auditStage={audit.stage} onRefresh={load} canUpload={canUpload&&audit.stage!=='finalized'&&!audit.drive_link} user={user}/></div>}
       {tab==='consent'&&<ConsentSection audit={audit} onRefresh={load}/>}
       {tab==='invoice'&&<InvoiceSection audit={audit} onRefresh={load}/>}
     </div>
