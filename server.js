@@ -294,6 +294,30 @@ app.get('/api/notifications', auth(), function(req, res) {
   res.json(notifs);
 });
 
+// ── ADMIN STATS (protected by key) ───────────────────────────────────────
+app.get('/api/admin/stats', function(req, res) {
+  var key = req.query.key || '';
+  var adminKey = process.env.ADMIN_KEY || 'auditflow-admin-2024';
+  if (key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  var db = loadDB();
+  var users = db.users || [];
+  var audits = db.audits || [];
+  var byRole = {};
+  users.forEach(function(u) {
+    var r = u.role || 'unknown';
+    byRole[r] = (byRole[r] || 0) + 1;
+  });
+  var recentSignups = users.slice(-10).reverse().map(function(u) {
+    return { name: u.name, email: u.email, role: u.role, joined: u.created_at };
+  });
+  res.json({
+    total_users: users.length,
+    by_role: byRole,
+    total_audits: audits.length,
+    recent_signups: recentSignups
+  });
+});
+
 // ── AUDIT ROUTES ─────────────────────────────────────────────────────────
 app.get('/api/audits', auth(), function(req, res) {
   const u = req.user;
