@@ -118,15 +118,6 @@ table.rpt-tbl input{padding:5px 7px;font-size:12.5px}
 </head>
 <body>
 <div id="root"></div>
-<script>
-// Mobile visitors without a session → landing page
-(function(){
-  var isMobile=/Mobi|Android|iPhone|iPad|iPod|BlackBerry|Windows Phone/i.test(navigator.userAgent);
-  var hasToken=!!localStorage.getItem('af_token');
-  var isLander=window.location.pathname==='/lander';
-  if(isMobile&&!hasToken&&!isLander){window.location.replace('/lander');}
-})();
-</script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, createContext, useContext } = React;
 
