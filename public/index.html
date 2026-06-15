@@ -156,12 +156,23 @@ function DriveLink({audit,user,onRefresh}){
   const[saving,setSaving]=useState(false);
   const canEdit=user.role==='banker'||user.role==='ca'||user.role==='admin';
   async function save(){setSaving(true);await API.put(`/api/audits/${audit.id}/drive-link`,{drive_link:link});setSaving(false);setEditing(false);onRefresh();}
-  if(audit.drive_link&&!editing)return(<div style={{background:'#f0fdf4',border:'1.5px solid #86efac',borderRadius:10,padding:14,marginBottom:14,display:'flex',gap:10,alignItems:'center'}}>
-    <span style={{fontSize:20}}>📁</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:'#16a34a'}}>Document Folder (Google Drive)</div>
-    <div style={{fontSize:12,color:'#6b7280',marginTop:2}}>All audit documents are shared via this folder</div></div>
-    <a href={audit.drive_link} target="_blank" className="btn btn-g btn-sm">Open Folder</a>
-    {canEdit&&<button className="btn btn-o btn-xs" onClick={()=>setEditing(true)}>Edit</button>}
-  </div>);
+  if(audit.drive_link&&!editing){
+    if(user.role==='borrower')return(
+      <div style={{background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',border:'2px solid #86efac',borderRadius:14,padding:22,marginBottom:14,textAlign:'center'}}>
+        <div style={{fontSize:36,marginBottom:8}}>📁</div>
+        <div style={{fontWeight:800,fontSize:15,color:'#14532d',marginBottom:6}}>Upload Your Documents Here</div>
+        <div style={{fontSize:13,color:'#166534',marginBottom:16,lineHeight:1.6}}>Your CA has created a shared Google Drive folder for this audit.<br/>Upload your <strong>stock statement, debtors list, and insurance policy</strong> to this folder.</div>
+        <a href={audit.drive_link} target="_blank" style={{display:'inline-block',background:'#16a34a',color:'#fff',padding:'12px 28px',borderRadius:9,fontWeight:800,fontSize:14,textDecoration:'none',boxShadow:'0 4px 12px rgba(22,163,74,0.3)'}}>📂 Open Folder &amp; Upload Documents →</a>
+        <div style={{fontSize:11,color:'#6b7280',marginTop:12}}>Once uploaded, your CA will be notified and will begin the review.</div>
+      </div>
+    );
+    return(<div style={{background:'#f0fdf4',border:'1.5px solid #86efac',borderRadius:10,padding:14,marginBottom:14,display:'flex',gap:10,alignItems:'center'}}>
+      <span style={{fontSize:20}}>📁</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:'#16a34a'}}>Document Folder (Google Drive)</div>
+      <div style={{fontSize:12,color:'#6b7280',marginTop:2}}>All audit documents are shared via this folder</div></div>
+      <a href={audit.drive_link} target="_blank" className="btn btn-g btn-sm">Open Folder</a>
+      {canEdit&&<button className="btn btn-o btn-xs" onClick={()=>setEditing(true)}>Edit</button>}
+    </div>);
+  }
   if(canEdit)return(<div style={{background:'#fffbeb',border:'1.5px dashed #fcd34d',borderRadius:10,padding:14,marginBottom:14}}>
     <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>📁 Link Google Drive Folder</div>
     <div style={{fontSize:12,color:'#6b7280',marginBottom:8}}>Create a shared Drive folder for this audit, paste the link below. Borrower and CA will use this folder to exchange documents — no file uploads needed here.</div>
@@ -681,7 +692,7 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
         <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Activity Timeline</div>
         {(audit.timeline||[]).map((t,i)=>{const isWarn=t.note.includes('⚠');const isGreen=t.note.includes('approved')||t.note.includes('completed')||t.note.includes('finalized')||t.note.includes('uploaded');return(<div key={i} className="tl-item"><div className={`tl-dot ${isWarn?'r':isGreen?'g':''}` }/><div><div style={{fontSize:13,color:isWarn?'var(--red)':'inherit'}}>{t.note}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:1}}>{t.actor} · {fmtDate(t.created_at)}</div></div></div>);})}
       </div>}
-      {tab==='docs'&&<div><DriveLink audit={audit} user={user} onRefresh={load}/><DocList docs={audit.documents||[]} auditId={audit.id} auditStage={audit.stage} onRefresh={load} canUpload={canUpload&&audit.stage!=='finalized'} user={user}/></div>}
+      {tab==='docs'&&<div><DriveLink audit={audit} user={user} onRefresh={load}/><DocList docs={audit.documents||[]} auditId={audit.id} auditStage={audit.stage} onRefresh={load} canUpload={canUpload&&audit.stage!=='finalized'&&!(user.role==='borrower'&&audit.drive_link)} user={user}/></div>}
       {tab==='consent'&&<ConsentSection audit={audit} onRefresh={load}/>}
       {tab==='invoice'&&<InvoiceSection audit={audit} onRefresh={load}/>}
     </div>
