@@ -885,6 +885,11 @@ app.get('/api/profile/ca/:icai_no', function(req, res) {
 });
 
 
+// ── LANDING PAGE ROUTE ────────────────────────────────────────────────────────
+app.get('/lander', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
+
 // ── CATCH-ALL (serve React SPA) ───────────────────────────────────────────────
 app.get('*', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
