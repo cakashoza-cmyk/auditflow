@@ -892,6 +892,9 @@ app.get('/', function(req, res) {
 app.get('/lander', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'landing.html'));
 });
+app.get('/landing.html', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
 
 // ── APP (login/dashboard) ─────────────────────────────────────────────────────
 app.get('/app', function(req, res) {
