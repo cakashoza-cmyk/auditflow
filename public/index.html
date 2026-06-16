@@ -337,7 +337,13 @@ function ReportForm({audit,onClose,onRefresh}){
     const d=data.debtors||[];
     const coverDays=parseFloat(data.debtor_cover_days)||90;
     const BMAX=[30,60,90,120,180,Infinity];
-    const eligDebtors=Math.round((data.debtors||[]).reduce(function(sum,r,i){if(!r||BMAX[i]>coverDays)return sum;if((r.dp_eligible||'Yes')==='No')return sum;return sum+(parseFloat(r.amount)||0);},0));
+    const eligDebtors=Math.round((data.debtors||[]).reduce(function(sum,r,i){
+      if(!r||BMAX[i]>coverDays)return sum;
+      const amt=parseFloat(r.amount)||0;
+      const grp=parseFloat(r.group_amt)||0;
+      const inclGrp=(r.include_group||'Yes')==='Yes';
+      return sum+(inclGrp?amt:Math.max(0,amt-grp));
+    },0));
     const creditors=parseFloat(data.total_creditors)||0;
     const sMargin=(parseFloat(data.stock_margin_pct)||25)/100;
     const dMargin=(parseFloat(data.debtor_margin_pct)||40)/100;
@@ -441,12 +447,16 @@ ${d.stock_observations?'<div class="field"><label>Storage & Quality Observations
 
 <h2>Section 3 — Book Debts / Debtors</h2>
 <table>
-  <thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Group Debtor?</th><th>Remarks</th></tr></thead>
+  <thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Group Debtor Amt</th><th>Incl. Group in DP?</th><th>DP Eligible Amt</th><th>Remarks</th></tr></thead>
   <tbody>
     ${['< 30 days','30-60 days','60-90 days','90-120 days','120-180 days','> 180 days'].map(function(row,i){
       const r=deb[i]||{};
-      const elig=(r.dp_eligible||'Yes')!=='No';
-      return '<tr'+((!elig)?' style="background:#fef3c7"':'')+'><td>'+row+'</td><td>'+(r.amount||'-')+'</td><td>'+(r.pct||'-')+'%</td><td>'+(elig?'<span style="color:#16a34a;font-weight:700">Yes</span>':'<strong style="color:#d97706">No — Excluded</strong>')+'</td><td>'+(r.remarks||'-')+'</td></tr>';
+      const amt2=parseFloat(r.amount)||0;
+      const grp2=parseFloat(r.group_amt)||0;
+      const inclGrp2=(r.include_group||'Yes')==='Yes';
+      const dpAmt2=inclGrp2?amt2:Math.max(0,amt2-grp2);
+      const excl2=!inclGrp2&&grp2>0;
+      return '<tr'+(excl2?' style="background:#fef3c7"':'')+'><td>'+row+'</td><td>'+(r.amount||'-')+'</td><td>'+(r.pct||'-')+'%</td><td>'+(r.group_amt||'-')+'</td><td>'+(inclGrp2?'<span style="color:#16a34a;font-weight:700">Yes</span>':'<strong style="color:#d97706">No</strong>')+'</td><td style="font-weight:700;color:'+(excl2?'#d97706':'#16a34a')+'">'+dpAmt2+'</td><td>'+(r.remarks||'-')+'</td></tr>';
     }).join('')}
   </tbody>
 </table>
@@ -589,15 +599,25 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
 
       <div className="rpt-section"><div className="rpt-sh">Section 3 — Book Debts / Debtors Analysis</div><div className="rpt-body">
         <div className="fg"><label>Total Debtors (Rs.)</label><input value={data.total_debtors||''} onChange={e=>set('total_debtors',e.target.value)} disabled={readOnly}/></div>
-        <div style={{fontSize:12,color:'var(--gray)',marginBottom:8}}>Set "DP Eligible?" to <strong>No</strong> to exclude a bucket (e.g. group debtors, disputed). Debtors beyond the cover period are auto-excluded.</div>
-        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>DP Eligible?</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>{
-          const elig=(debtors[i]&&debtors[i].dp_eligible)!=='No';
-          return(<tr key={row} style={!elig?{background:'var(--amber-l)'}:{}}>
+        <div style={{fontSize:12,color:'var(--gray)',marginBottom:8}}>Enter group debtor amount per bucket. Set "Include Group in DP?" to <strong>No</strong> to deduct it from DP (e.g. if group debtor is Rs 3 out of Rs 10, DP uses Rs 7). Buckets beyond the cover period are auto-excluded.</div>
+        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr>
+          <th>Aging Bucket</th><th>Total Amt (Rs.)</th><th>% of Total</th>
+          <th>Group Debtor Amt (Rs.)</th><th>Include Group in DP?</th><th>DP Eligible Amt</th><th>Remarks</th>
+        </tr></thead><tbody>{DROWS.map((row,i)=>{
+          const r=debtors[i]||{};
+          const amt=parseFloat(r.amount)||0;
+          const grp=parseFloat(r.group_amt)||0;
+          const inclGrp=(r.include_group||'Yes')==='Yes';
+          const dpAmt=inclGrp?amt:Math.max(0,amt-grp);
+          const excluded=!inclGrp&&grp>0;
+          return(<tr key={row} style={excluded?{background:'var(--amber-l)'}:{}}>
             <td style={{fontWeight:600,fontSize:12.5}}>{row}</td>
-            <td><input value={(debtors[i]&&debtors[i].amount)||''} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td>
-            <td><input value={(debtors[i]&&debtors[i].pct)||''} readOnly style={{background:'var(--gray-l)',cursor:'default'}}/></td>
-            <td><select value={(debtors[i]&&debtors[i].dp_eligible)||'Yes'} onChange={e=>setDebt(i,'dp_eligible',e.target.value)} disabled={readOnly} style={{background:!elig?'var(--amber-m)':'var(--green-m)',fontWeight:700,color:!elig?'var(--amber)':'var(--green)'}}><option>Yes</option><option>No</option></select></td>
-            <td><input value={(debtors[i]&&debtors[i].remarks)||''} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td>
+            <td><input value={r.amount||''} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td>
+            <td><input value={r.pct||''} readOnly style={{background:'var(--gray-l)',cursor:'default'}}/></td>
+            <td><input type="number" value={r.group_amt||''} onChange={e=>setDebt(i,'group_amt',e.target.value)} disabled={readOnly} placeholder="0" style={{background:'#fffbeb'}}/></td>
+            <td><select value={r.include_group||'Yes'} onChange={e=>setDebt(i,'include_group',e.target.value)} disabled={readOnly} style={{background:inclGrp?'var(--green-m)':'var(--amber-m)',fontWeight:700,color:inclGrp?'var(--green)':'var(--amber)',minWidth:60}}><option>Yes</option><option>No</option></select></td>
+            <td><input value={amt>0?dpAmt:''} readOnly style={{background:excluded?'var(--amber-m)':'var(--green-m)',cursor:'default',fontWeight:700,color:excluded?'var(--amber)':'var(--green)'}}/></td>
+            <td><input value={r.remarks||''} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td>
           </tr>);
         })}</tbody></table></div>
         <div className="fg" style={{marginTop:12}}><label>Disputed / Sticky Debtors (Rs.)</label><input value={data.disputed_debtors||''} onChange={e=>set('disputed_debtors',e.target.value)} disabled={readOnly}/></div>
