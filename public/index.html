@@ -335,7 +335,9 @@ function ReportForm({audit,onClose,onRefresh}){
     const deadPct=Math.min(100,(parseFloat(data.stock_dead_pct)||0)+(parseFloat(data.stock_slow_pct)||0));
     const goodStock=Math.round(totalPhysical*(1-deadPct/100));
     const d=data.debtors||[];
-    const eligDebtors=Math.round([d[0],d[1],d[2]].reduce(function(sum,r){return sum+(r&&r.group_debtor==='Yes'?0:parseFloat(r&&r.amount)||0);},0));
+    const coverDays=parseFloat(data.debtor_cover_days)||90;
+    const BMAX=[30,60,90,120,180,Infinity];
+    const eligDebtors=Math.round((data.debtors||[]).reduce(function(sum,r,i){if(!r||BMAX[i]>coverDays)return sum;if((r.dp_eligible||'Yes')==='No')return sum;return sum+(parseFloat(r.amount)||0);},0));
     const creditors=parseFloat(data.total_creditors)||0;
     const sMargin=(parseFloat(data.stock_margin_pct)||25)/100;
     const dMargin=(parseFloat(data.debtor_margin_pct)||40)/100;
@@ -443,8 +445,8 @@ ${d.stock_observations?'<div class="field"><label>Storage & Quality Observations
   <tbody>
     ${['< 30 days','30-60 days','60-90 days','90-120 days','120-180 days','> 180 days'].map(function(row,i){
       const r=deb[i]||{};
-      const isGroup=r.group_debtor==='Yes';
-      return '<tr'+(isGroup?' style="background:#fef3c7"':'')+'><td>'+row+'</td><td>'+(r.amount||'-')+'</td><td>'+(r.pct||'-')+'%</td><td>'+(isGroup?'<strong style="color:#d97706">Yes — Excluded from DP</strong>':'No')+'</td><td>'+(r.remarks||'-')+'</td></tr>';
+      const elig=(r.dp_eligible||'Yes')!=='No';
+      return '<tr'+((!elig)?' style="background:#fef3c7"':'')+'><td>'+row+'</td><td>'+(r.amount||'-')+'</td><td>'+(r.pct||'-')+'%</td><td>'+(elig?'<span style="color:#16a34a;font-weight:700">Yes</span>':'<strong style="color:#d97706">No — Excluded</strong>')+'</td><td>'+(r.remarks||'-')+'</td></tr>';
     }).join('')}
   </tbody>
 </table>
@@ -567,9 +569,10 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
             <div className="fg"><label>Debtor Margin % (bank norm)</label><input type="number" value={data.debtor_margin_pct||40} onChange={e=>set('debtor_margin_pct',e.target.value)} disabled={readOnly} min={0} max={100}/></div>
             <div className="fg"><label>Total Creditors (Rs.) — deducted from DP</label><input type="number" value={data.total_creditors||''} onChange={e=>set('total_creditors',e.target.value)} disabled={readOnly} placeholder="0"/></div>
           </div>
-          <div className="fg2" style={{marginBottom:10}}>
+          <div className="fg3" style={{marginBottom:10}}>
             <div className="fg"><label>% Slow-Moving Stock <span style={{color:'var(--amber)',fontSize:11}}>(auto-excluded from DP)</span></label><input type="number" value={data.stock_slow_pct||''} onChange={e=>set('stock_slow_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
             <div className="fg"><label>% Dead / Non-Moving Stock <span style={{color:'var(--red)',fontSize:11}}>(auto-excluded from DP)</span></label><input type="number" value={data.stock_dead_pct||''} onChange={e=>set('stock_dead_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
+            <div className="fg"><label>Debtor Cover Period (days) <span style={{color:'var(--blue)',fontSize:11}}>(debtors beyond this excluded)</span></label><input type="number" value={data.debtor_cover_days||90} onChange={e=>set('debtor_cover_days',e.target.value)} disabled={readOnly} placeholder="90"/></div>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,fontSize:12}}>
             <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Stocks</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.goodStock.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Physical less slow-moving &amp; dead stock</div></div>
@@ -586,14 +589,14 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
 
       <div className="rpt-section"><div className="rpt-sh">Section 3 — Book Debts / Debtors Analysis</div><div className="rpt-body">
         <div className="fg"><label>Total Debtors (Rs.)</label><input value={data.total_debtors||''} onChange={e=>set('total_debtors',e.target.value)} disabled={readOnly}/></div>
-        <div style={{fontSize:12,color:'var(--gray)',marginBottom:8}}>Mark debtors as "Group" to auto-exclude them from DP. Debtors beyond 90 days are already excluded.</div>
-        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Group Debtor?</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>{
-          const isGroup=(debtors[i]&&debtors[i].group_debtor)==='Yes';
-          return(<tr key={row} style={isGroup?{background:'var(--amber-l)'}:{}}>
+        <div style={{fontSize:12,color:'var(--gray)',marginBottom:8}}>Set "DP Eligible?" to <strong>No</strong> to exclude a bucket (e.g. group debtors, disputed). Debtors beyond the cover period are auto-excluded.</div>
+        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>DP Eligible?</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>{
+          const elig=(debtors[i]&&debtors[i].dp_eligible)!=='No';
+          return(<tr key={row} style={!elig?{background:'var(--amber-l)'}:{}}>
             <td style={{fontWeight:600,fontSize:12.5}}>{row}</td>
             <td><input value={(debtors[i]&&debtors[i].amount)||''} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td>
             <td><input value={(debtors[i]&&debtors[i].pct)||''} readOnly style={{background:'var(--gray-l)',cursor:'default'}}/></td>
-            <td><select value={(debtors[i]&&debtors[i].group_debtor)||'No'} onChange={e=>setDebt(i,'group_debtor',e.target.value)} disabled={readOnly} style={{background:isGroup?'var(--amber-m)':'',fontWeight:isGroup?700:400,color:isGroup?'var(--amber)':''}}><option>No</option><option>Yes</option></select></td>
+            <td><select value={(debtors[i]&&debtors[i].dp_eligible)||'Yes'} onChange={e=>setDebt(i,'dp_eligible',e.target.value)} disabled={readOnly} style={{background:!elig?'var(--amber-m)':'var(--green-m)',fontWeight:700,color:!elig?'var(--amber)':'var(--green)'}}><option>Yes</option><option>No</option></select></td>
             <td><input value={(debtors[i]&&debtors[i].remarks)||''} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td>
           </tr>);
         })}</tbody></table></div>
