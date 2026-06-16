@@ -269,6 +269,36 @@ app.put('/api/auth/me', auth(), function(req, res) {
   res.json(safeUser(dbFindOne('users', { id: req.user.id })));
 });
 
+// ── FORGOT PASSWORD (OTP via email) ─────────────────────────────────────────
+app.post('/api/auth/forgot-password', async function(req, res) {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const user = dbFindOne('users', { email });
+  if (!user) return res.status(400).json({ error: 'No account found with that email' });
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiry = Date.now() + 15 * 60 * 1000; // 15 minutes
+  dbUpdate('users', { id: user.id }, { reset_otp: otp, reset_otp_expiry: expiry });
+  sendEmail({
+    to: email, toName: user.name,
+    subject: '[AuditFlow] Password Reset OTP',
+    body: 'Dear ' + user.name + ',\n\nYour OTP to reset your AuditFlow password is:\n\n  ' + otp + '\n\nThis OTP is valid for 15 minutes. Do not share it with anyone.\n\nIf you did not request this, please ignore this email.\n\nRegards,\nTeam AuditFlow',
+    type: 'otp'
+  });
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/reset-password', async function(req, res) {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) return res.status(400).json({ error: 'All fields required' });
+  const user = dbFindOne('users', { email });
+  if (!user) return res.status(400).json({ error: 'No account found' });
+  if (!user.reset_otp || user.reset_otp !== otp) return res.status(400).json({ error: 'Invalid OTP' });
+  if (Date.now() > (user.reset_otp_expiry || 0)) return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
+  const hash = await bcrypt.hash(newPassword, 10);
+  dbUpdate('users', { id: user.id }, { password: hash, is_temp_password: false, reset_otp: null, reset_otp_expiry: null });
+  res.json({ ok: true });
+});
+
 app.put('/api/auth/change-password', auth(), async function(req, res) {
   const { current, newPassword } = req.body;
   const user = dbFindOne('users', { id: req.user.id });
