@@ -325,7 +325,9 @@ app.get('/api/audits', auth(), function(req, res) {
   if (u.role === 'ca') {
     audits = audits.filter(function(a) { return a.ca_id == u.id || a.ca_email === user.email; });
   } else if (u.role === 'banker') {
-    audits = audits.filter(function(a) { return a.banker_id == u.id; });
+    audits = audits.filter(function(a) {
+      return a.banker_id == u.id || (Array.isArray(a.banker_ids) && a.banker_ids.includes(u.id));
+    });
   } else if (u.role === 'borrower') {
     audits = audits.filter(function(a) { return a.borrower_id == u.id || a.borrower_email === user.email; });
   }
@@ -339,25 +341,19 @@ app.get('/api/audits', auth(), function(req, res) {
 
 app.post('/api/audits', auth(['banker','admin','ca']), async function(req, res) {
   const { borrower_name, bank_name, branch, exposure, constitution, city, cluster,
-          deadline, fee, ca_id, ca_email: caEmailParam, borrower_email, banker_email, notes } = req.body;
+          deadline, fee, ca_id, ca_email: caEmailParam, borrower_email, banker_emails, notes } = req.body;
   if (!borrower_name || !bank_name || !branch)
     return res.status(400).json({ error: 'borrower_name, bank_name, branch required' });
 
+  // Normalise banker list: deduplicate, max 6
+  const rawBankerEmails = Array.isArray(banker_emails) ? banker_emails.filter(Boolean).slice(0,6) : [];
+
   let resolved_ca_id = ca_id || null;
   let resolved_ca_email = caEmailParam || null;
-  let resolved_banker_id = req.user.role === 'banker' ? req.user.id : null;
-  let resolved_banker_email = null;
   let resolved_borrower_id = null;
   let resolved_borrower_email = borrower_email || null;
 
-  if (req.user.role === 'ca') {
-    resolved_ca_id = req.user.id;
-    if (banker_email) {
-      const b = dbFindOne('users', { email:banker_email, role:'banker' });
-      if (b) { resolved_banker_id = b.id; }
-      else resolved_banker_email = banker_email;
-    }
-  }
+  if (req.user.role === 'ca') resolved_ca_id = req.user.id;
   if (borrower_email) {
     const bor = dbFindOne('users', { email:borrower_email, role:'borrower' });
     if (bor) resolved_borrower_id = bor.id;
@@ -369,10 +365,33 @@ app.post('/api/audits', auth(['banker','admin','ca']), async function(req, res) 
   }
 
   const id = genAuditId();
+  const tempPwd = Math.random().toString(36).slice(-8);
+
+  // ── Resolve all bankers ──────────────────────────────────────────────────
+  const resolvedBankerIds = [];
+  if (req.user.role === 'banker') resolvedBankerIds.push(req.user.id); // initiating banker always included
+
+  for (const email of rawBankerEmails) {
+    if (!email) continue;
+    let bankerUser = dbFindOne('users', { email });
+    if (!bankerUser) {
+      const hash = await bcrypt.hash(tempPwd, 10);
+      bankerUser = dbInsert('users', { name:'Banker ('+email+')', email, password:hash, role:'banker',
+        is_temp_password:true, bank_name:bank_name||null, branch:branch||null,
+        icai_no:null, firm_name:null, firm_reg_no:null, city:null, phone:null, address:null,
+        gstin:null, pan:null, constitution:null });
+      addTimeline(id, 'Banker invite sent to ' + email, 'System');
+    }
+    if (!resolvedBankerIds.includes(bankerUser.id)) resolvedBankerIds.push(bankerUser.id);
+  }
+
+  const primaryBankerId = resolvedBankerIds[0] || null;
+
   dbInsert('audits', {
-    id, borrower_id:resolved_borrower_id, banker_id:resolved_banker_id,
+    id, borrower_id:resolved_borrower_id, banker_id:primaryBankerId,
+    banker_ids:resolvedBankerIds,
     ca_id:resolved_ca_id, ca_email:resolved_ca_email,
-    borrower_email:resolved_borrower_email, banker_email:resolved_banker_email,
+    borrower_email:resolved_borrower_email,
     borrower_name, bank_name, branch,
     exposure:exposure||null, constitution:constitution||null,
     city:city||null, cluster:cluster||null,
@@ -387,8 +406,8 @@ app.post('/api/audits', auth(['banker','admin','ca']), async function(req, res) 
   const caName = (caUserR && caUserR.name) || 'To be assigned';
   const caEmail2 = (caUserR && caUserR.email) || resolved_ca_email;
   const icaiNo = (caUserR && caUserR.icai_no) || '—';
-  const tempPwd = Math.random().toString(36).slice(-8);
 
+  // Send CA email
   if (caEmail2) {
     if (!dbFindOne('users', { email: caEmail2 })) {
       const hash = await bcrypt.hash(tempPwd, 10);
@@ -402,10 +421,12 @@ app.post('/api/audits', auth(['banker','admin','ca']), async function(req, res) 
     } else {
       addTimeline(id, 'Assigned to CA ' + caName, req.user.name);
       sendEmail({ to:caEmail2, toName:caName, subject:'[AuditFlow] New audit assigned: ' + borrower_name,
-        body:'Dear ' + caName + ',\n\nNew audit assigned: ' + borrower_name + ' (' + bank_name + ', ' + branch + ')\nAudit ID: ' + id + '\n\nLogin: ' + (process.env.APP_URL || 'http://localhost:3000') + '',
+        body:'Dear ' + caName + ',\n\nNew audit assigned: ' + borrower_name + ' (' + bank_name + ', ' + branch + ')\nAudit ID: ' + id + '\n\nLogin: ' + (process.env.APP_URL || 'http://localhost:3000'),
         type:'assignment_ca' });
     }
   }
+
+  // Send borrower email
   if (borrower_email) {
     if (!dbFindOne('users', { email: borrower_email })) {
       const hash2 = await bcrypt.hash(tempPwd, 10);
@@ -418,26 +439,26 @@ app.post('/api/audits', auth(['banker','admin','ca']), async function(req, res) 
     sendWelcomeEmail({ name:borrower_name, email:borrower_email, role:'borrower', tempPassword:tempPwd,
       auditId:id, borrowerName:borrower_name, bankName:bank_name, caName, icaiNo });
   }
-  if (resolved_banker_email && !dbFindOne('users', { email:resolved_banker_email })) {
-    const hash3 = await bcrypt.hash(tempPwd, 10);
-    const newBanker = dbInsert('users', { name:'Banker ('+resolved_banker_email+')', email:resolved_banker_email,
-      password:hash3, role:'banker', is_temp_password:true, bank_name:bank_name||null, branch:branch||null,
-      icai_no:null, firm_name:null, firm_reg_no:null, city:null, phone:null, address:null,
-      gstin:null, pan:null, constitution:null });
-    dbUpdate('audits', { id }, { banker_id:newBanker.id, banker_email:null });
-    sendWelcomeEmail({ name:'Banker ('+resolved_banker_email+')', email:resolved_banker_email, role:'banker',
-      tempPassword:tempPwd, auditId:id, borrowerName:borrower_name, bankName:bank_name, caName, icaiNo });
-    addTimeline(id, 'Banker invite sent to ' + resolved_banker_email, 'System');
+
+  // Send banker emails to all resolved bankers
+  for (const bid of resolvedBankerIds) {
+    const bUser = safeUser(dbFindOne('users', { id:bid }));
+    if (!bUser) continue;
+    sendWelcomeEmail({ name:bUser.name, email:bUser.email, role:'banker', tempPassword:tempPwd,
+      auditId:id, borrowerName:borrower_name, bankName:bank_name, caName, icaiNo });
   }
+
   res.json(dbFindOne('audits', { id }));
 });
 
 app.get('/api/audits/:id', auth(), function(req, res) {
   const audit = dbFindOne('audits', { id: req.params.id });
   if (!audit) return res.status(404).json({ error: 'Not found' });
+  const bankerIds = Array.isArray(audit.banker_ids) && audit.banker_ids.length ? audit.banker_ids : (audit.banker_id ? [audit.banker_id] : []);
   res.json(Object.assign({}, audit, {
     ca:       audit.ca_id     ? safeUser(dbFindOne('users', { id:audit.ca_id }))     : null,
     banker:   audit.banker_id ? safeUser(dbFindOne('users', { id:audit.banker_id })) : null,
+    bankers:  bankerIds.map(function(bid) { return safeUser(dbFindOne('users', { id:bid })); }).filter(Boolean),
     documents: dbFind('documents', { audit_id:audit.id }),
     timeline:  dbFind('timeline',  { audit_id:audit.id }).sort(function(a,b){ return new Date(b.created_at)-new Date(a.created_at); }),
     report:   dbFindOne('reports',    { audit_id:audit.id }),

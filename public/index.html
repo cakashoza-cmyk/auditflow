@@ -686,6 +686,10 @@ function AuditPanel({auditId,onClose,onRefresh:pr}){
       <div className="ptabs">{tabs.map(t=><div key={t.key} className={`ptab ${tab===t.key?'active':''}`} onClick={()=>setTab(t.key)}>{t.label}</div>)}</div>
       {tab==='workflow'&&<div>
         <Stepper stage={audit.stage}/>
+        {(audit.bankers&&audit.bankers.length>0)&&<div style={{background:'var(--blue-l)',border:'1px solid var(--blue-m)',borderRadius:9,padding:'10px 14px',marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:'var(--blue)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>Bankers on this Audit ({audit.bankers.length})</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>{audit.bankers.map(b=><span key={b.id} style={{background:'#fff',border:'1px solid var(--blue-m)',borderRadius:6,padding:'3px 10px',fontSize:12,fontWeight:600}}>🏦 {b.name}{b.bank_name?' · '+b.bank_name:''}</span>)}</div>
+        </div>}
         <div style={{display:'flex',gap:8,margin:'14px 0',flexWrap:'wrap'}}>
           {canAdvance&&audit.stage!=='finalized'&&<button className="btn btn-p" onClick={advance} disabled={advancing} style={{flex:1,justifyContent:'center'}}>{advancing?'…':`→ ${(STAGES[(SI[audit.stage]||0)+1]||{label:"Next"}).label}`}</button>}
           {(user.role==='ca'||user.role==='admin')&&<button className="btn btn-o" onClick={()=>setShowReport(true)} style={{flex:1,justifyContent:'center'}}>📝 {(audit.report&&audit.report.status)==='finalized'?'View Report':'Fill RBI Report'}</button>}
@@ -783,14 +787,25 @@ function CAInvoices(){
 function InitiateAudit({onDone}){
   const{user}=useAuth();
   const[cas,setCAs]=useState([]);
-  const[bankers,setBankers]=useState([]);
-  const[form,setForm]=useState({borrower_name:'',bank_name:user.bank_name||'',branch:user.branch||'',exposure:'',constitution:'Proprietorship',city:'',cluster:'',deadline:'',fee:'',ca_id:'',ca_email:'',borrower_email:'',banker_email:'',notes:''});
+  const[regBankers,setRegBankers]=useState([]);
+  const[bankerList,setBankerList]=useState([{email:'',id:''}]);
+  const[form,setForm]=useState({borrower_name:'',bank_name:user.bank_name||'',branch:user.branch||'',exposure:'',constitution:'Proprietorship',city:'',cluster:'',deadline:'',fee:'',ca_id:'',ca_email:'',borrower_email:'',notes:''});
   const[saving,setSaving]=useState(false);
   const[err,setErr]=useState('');
   const[done,setDone]=useState(null);
-  useEffect(()=>{API.get('/api/cas').then(setCAs);if(user.role==='ca')API.get('/api/bankers').then(setBankers);},[]);
+  useEffect(()=>{API.get('/api/cas').then(setCAs);API.get('/api/bankers').then(setRegBankers);},[]);
   function set(k,v){setForm(p=>({...p,[k]:v}));}
-  async function submit(e){e.preventDefault();if(!form.borrower_name||!form.bank_name||!form.branch){setErr('Borrower name, bank and branch required.');return;}setSaving(true);setErr('');const r=await API.post('/api/audits',{...form,fee:parseFloat(form.fee)||0,ca_id:form.ca_id||null});setSaving(false);if(r.error){setErr(r.error);return;}setDone(r.id);onDone(r.id);}
+  function addBanker(){if(bankerList.length<6)setBankerList(p=>[...p,{email:'',id:''}]);}
+  function setBankerRow(i,k,v){setBankerList(p=>p.map((b,j)=>j===i?{...b,[k]:v}:b));}
+  function removeBanker(i){setBankerList(p=>p.filter((_,j)=>j!==i));}
+  async function submit(e){
+    e.preventDefault();
+    if(!form.borrower_name||!form.bank_name||!form.branch){setErr('Borrower name, bank and branch required.');return;}
+    const banker_emails=bankerList.map(b=>b.email||'').filter(Boolean);
+    setSaving(true);setErr('');
+    const r=await API.post('/api/audits',{...form,fee:parseFloat(form.fee)||0,ca_id:form.ca_id||null,banker_emails});
+    setSaving(false);if(r.error){setErr(r.error);return;}setDone(r.id);onDone(r.id);
+  }
   return(<div className="page"><div className="section-t mb-4">Initiate New Stock Audit</div>
     <form onSubmit={submit} style={{maxWidth:720}}>
       <div className="card mb-4"><div style={{fontWeight:700,fontSize:13,marginBottom:14}}>Borrower Details</div>
@@ -802,7 +817,35 @@ function InitiateAudit({onDone}){
         <div className="fg2"><div className="fg"><label>Bank Name *</label><input value={form.bank_name} onChange={e=>set('bank_name',e.target.value)}/></div><div className="fg"><label>Branch *</label><input value={form.branch} onChange={e=>set('branch',e.target.value)}/></div></div>
         <div className="fg2"><div className="fg"><label>Exposure (₹)</label><input value={form.exposure} onChange={e=>set('exposure',e.target.value)}/></div><div className="fg"><label>Audit Fee (₹ excl. GST)</label><input type="number" value={form.fee} onChange={e=>set('fee',e.target.value)}/></div></div>
         <div className="fg"><label>Deadline</label><input type="date" value={form.deadline} onChange={e=>set('deadline',e.target.value)}/></div>
-        {user.role==='ca'&&<div className="fg"><label>Banker Email</label><input type="email" value={form.banker_email} onChange={e=>set('banker_email',e.target.value)} placeholder="Banker gets portal invite if not registered"/></div>}
+        {user.role==='ca'&&<div className="fg">
+          <label style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>Banker(s) <span style={{color:'var(--gray)',fontWeight:400,fontSize:11}}>(up to 6 — all get email + portal access)</span></span>
+            {bankerList.length<6&&<button type="button" className="btn btn-o btn-xs" onClick={addBanker}>+ Add Banker</button>}
+          </label>
+          {bankerList.map((b,i)=>(
+            <div key={i} style={{display:'flex',gap:6,marginTop:6,alignItems:'center'}}>
+              <select value={b.id||''} onChange={e=>{setBankerRow(i,'id',e.target.value);if(e.target.value)setBankerRow(i,'email','');}} style={{width:200,flexShrink:0}}>
+                <option value="">— Registered banker —</option>
+                {regBankers.map(bk=><option key={bk.id} value={bk.id}>{bk.name} · {bk.bank_name||'?'}</option>)}
+              </select>
+              <span style={{color:'var(--gray)',fontSize:12}}>or</span>
+              <input type="email" value={b.email||''} onChange={e=>{setBankerRow(i,'email',e.target.value);if(e.target.value)setBankerRow(i,'id','');}} placeholder="banker@bank.com" style={{flex:1}}/>
+              {bankerList.length>1&&<button type="button" onClick={()=>removeBanker(i)} style={{background:'none',border:'none',color:'var(--red)',fontSize:16,cursor:'pointer',padding:'0 4px'}}>×</button>}
+            </div>
+          ))}
+        </div>}
+        {user.role==='banker'&&<div className="fg">
+          <label style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>Additional Banker(s) <span style={{color:'var(--gray)',fontWeight:400,fontSize:11}}>(you are auto-added; CC up to 5 more)</span></span>
+            {bankerList.length<5&&<button type="button" className="btn btn-o btn-xs" onClick={addBanker}>+ Add</button>}
+          </label>
+          {bankerList.map((b,i)=>(
+            <div key={i} style={{display:'flex',gap:6,marginTop:6,alignItems:'center'}}>
+              <input type="email" value={b.email||''} onChange={e=>setBankerRow(i,'email',e.target.value)} placeholder={`Co-banker ${i+1} email`} style={{flex:1}}/>
+              {bankerList.length>1&&<button type="button" onClick={()=>removeBanker(i)} style={{background:'none',border:'none',color:'var(--red)',fontSize:16,cursor:'pointer',padding:'0 4px'}}>×</button>}
+            </div>
+          ))}
+        </div>}
       </div>
       <div className="card mb-4"><div style={{fontWeight:700,fontSize:13,marginBottom:14}}>CA Assignment</div>
         {user.role==='banker'&&<><div className="fg"><label>Select CA (registered)</label><select value={form.ca_id} onChange={e=>{set('ca_id',e.target.value);if(e.target.value)set('ca_email','');}}><option value="">— Select registered CA or invite by email —</option>{cas.map(c=><option key={c.id} value={c.id}>{c.name} (M.No.{c.icai_no||'—'}{c.firm_reg_no?` / FRN:${c.firm_reg_no}`:''}) · {c.city||'—'}</option>)}</select></div>
