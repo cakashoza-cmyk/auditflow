@@ -106,24 +106,23 @@ function defaultDocs(auditId) {
 
 // ── EMAIL ───────────────────────────────────────────────────────────────
 function sendBrevoEmail({ to, toName, subject, body }) {
-  const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.SENDER_EMAIL || 'cakashoza@gmail.com';
-  if (!apiKey) { console.log('  EMAIL SKIPPED (no BREVO_API_KEY)'); return; }
+  const apiKey = process.env.RESEND_API_KEY;
+  const senderEmail = process.env.SENDER_EMAIL || 'noreply@auditflw.in';
+  if (!apiKey) { console.log('  EMAIL SKIPPED (no RESEND_API_KEY)'); return; }
   const payload = JSON.stringify({
-    sender: { name: 'AuditFlow', email: senderEmail },
-    to: [{ email: to, name: toName || to }],
+    from: 'AuditFlow <' + senderEmail + '>',
+    to: [to],
     subject: subject,
-    textContent: body
+    text: body
   });
   const options = {
-    hostname: 'api.brevo.com',
-    path: '/v3/smtp/email',
+    hostname: 'api.resend.com',
+    path: '/emails',
     method: 'POST',
     headers: {
-      'accept': 'application/json',
-      'api-key': apiKey,
-      'content-type': 'application/json',
-      'content-length': Buffer.byteLength(payload)
+      'Authorization': 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload)
     }
   };
   const req = https.request(options, function(res) {
