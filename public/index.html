@@ -332,10 +332,10 @@ function ReportForm({audit,onClose,onRefresh}){
   function calcDP(){
     const s=data.stocks||[];
     const totalPhysical=parseFloat((s[5]&&s[5].physical))||s.slice(0,5).reduce(function(sum,r){return sum+(parseFloat(r&&r.physical)||0);},0);
-    const deadPct=parseFloat(data.stock_dead_pct)||0;
+    const deadPct=Math.min(100,(parseFloat(data.stock_dead_pct)||0)+(parseFloat(data.stock_slow_pct)||0));
     const goodStock=Math.round(totalPhysical*(1-deadPct/100));
     const d=data.debtors||[];
-    const eligDebtors=Math.round((parseFloat((d[0]&&d[0].amount))||0)+(parseFloat((d[1]&&d[1].amount))||0)+(parseFloat((d[2]&&d[2].amount))||0));
+    const eligDebtors=Math.round([d[0],d[1],d[2]].reduce(function(sum,r){return sum+(r&&r.group_debtor==='Yes'?0:parseFloat(r&&r.amount)||0);},0));
     const creditors=parseFloat(data.total_creditors)||0;
     const sMargin=(parseFloat(data.stock_margin_pct)||25)/100;
     const dMargin=(parseFloat(data.debtor_margin_pct)||40)/100;
@@ -439,30 +439,24 @@ ${d.stock_observations?'<div class="field"><label>Storage & Quality Observations
 
 <h2>Section 3 — Book Debts / Debtors</h2>
 <table>
-  <thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Remarks</th></tr></thead>
+  <thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Group Debtor?</th><th>Remarks</th></tr></thead>
   <tbody>
-    ${['< 30 days','30-60 days','60-90 days','90-180 days','> 180 days'].map(function(row,i){
+    ${['< 30 days','30-60 days','60-90 days','90-120 days','120-180 days','> 180 days'].map(function(row,i){
       const r=deb[i]||{};
-      return '<tr><td>'+row+'</td><td>'+(r.amount||'-')+'</td><td>'+(r.pct||'-')+'%</td><td>'+(r.remarks||'-')+'</td></tr>';
+      const isGroup=r.group_debtor==='Yes';
+      return '<tr'+(isGroup?' style="background:#fef3c7"':'')+'><td>'+row+'</td><td>'+(r.amount||'-')+'</td><td>'+(r.pct||'-')+'%</td><td>'+(isGroup?'<strong style="color:#d97706">Yes — Excluded from DP</strong>':'No')+'</td><td>'+(r.remarks||'-')+'</td></tr>';
     }).join('')}
   </tbody>
 </table>
 <div class="grid2">
   <div class="field"><label>Total Debtors</label><span>Rs.${(parseFloat(d.total_debtors)||0).toLocaleString('en-IN')}</span></div>
-  <div class="field"><label>Debtors eligible for DP</label><span>Rs.${(parseFloat(d.dp_debtors)||0).toLocaleString('en-IN')}</span></div>
+  <div class="field"><label>Debtors eligible for DP (excl. group &amp; >90 days)</label><span>Rs.${dp.eligDebtors.toLocaleString('en-IN')}</span></div>
   <div class="field"><label>Disputed / Sticky Debtors</label><span>Rs.${(parseFloat(d.disputed_debtors)||0).toLocaleString('en-IN')}</span></div>
-  <div class="field"><label>Related Party Debtors</label><span>Rs.${(parseFloat(d.related_debtors)||0).toLocaleString('en-IN')}</span></div>
 </div>
 ${d.debtor_observations?'<div class="field"><label>Observations</label><p>'+d.debtor_observations+'</p></div>':''}
 
-<h2>Section 4 — Creditors</h2>
-<div class="grid2">
-  <div class="field"><label>Total Creditors</label><span>Rs.${(parseFloat(d.total_creditors)||0).toLocaleString('en-IN')}</span></div>
-  <div class="field"><label>Creditors > 90 days</label><span>Rs.${(parseFloat(d.old_creditors)||0).toLocaleString('en-IN')}</span></div>
-</div>
-${d.creditor_observations?'<div class="field"><label>Observations</label><p>'+d.creditor_observations+'</p></div>':''}
-
-<h2>Section 5 — Insurance</h2>
+<h2>Section 4 — Insurance</h2>
+<!-- creditors section removed per auditor request; total_creditors still used in DP calc -->
 <div class="grid3">
   <div class="field"><label>Insurer</label><span>${d.insurer||'-'}</span></div>
   <div class="field"><label>Policy No.</label><span>${d.policy_no||'-'}</span></div>
@@ -474,17 +468,13 @@ ${d.creditor_observations?'<div class="field"><label>Observations</label><p>'+d.
 ${parseFloat(d.sum_insured)>0&&parseFloat(d.outstanding)>0&&parseFloat(d.sum_insured)<parseFloat(d.outstanding)?'<div class="alert-red">Insurance Inadequate: Sum insured Rs.'+(parseFloat(d.sum_insured)||0).toLocaleString('en-IN')+' is less than outstanding Rs.'+(parseFloat(d.outstanding)||0).toLocaleString('en-IN')+'</div>':''}
 ${d.insurance_observations?'<div class="field"><label>Remarks</label><p>'+d.insurance_observations+'</p></div>':''}
 
-<h2>Section 6 — Observations & Compliance</h2>
+<h2>Section 5 — Observations & Compliance</h2>
 ${d.records_obs?'<div class="field"><label>Record Keeping & Accounting</label><p>'+d.records_obs+'</p></div>':''}
 ${d.ops_obs?'<div class="field"><label>Operations & Business Activity</label><p>'+d.ops_obs+'</p></div>':''}
 ${d.discrepancies?'<div class="field"><label>Key Discrepancies</label><p>'+d.discrepancies+'</p></div>':''}
 <div class="field"><label>Sanction Compliance</label><span>${d.sanction_compliance||'-'}</span></div>
 
-<h2>Section 7 — Rating & Certification</h2>
-<div class="grid2">
-  <div class="field"><label>Overall Rating</label><span>${d.rating?d.rating+'/6':'-'} ${['','(Excellent)','(Good)','(Satisfactory)','(Below Average)','(Poor)','(Unsatisfactory)'][parseInt(d.rating)||0]}</span></div>
-  <div class="field"><label>Sanction Compliance</label><span>${d.sanction_compliance||'-'}</span></div>
-</div>
+<h2>Section 6 — Certification</h2>
 ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p>'+d.recommendations+'</p></div>':''}
 
 <div class="cert">${d.certificate||'I certify that I have physically verified the stocks and books of the above borrower and the information contained in this report is true and correct to the best of my knowledge and belief.'}</div>
@@ -507,7 +497,7 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
 
   if(loading)return<div style={{padding:24,textAlign:'center',color:'var(--gray)'}}>Loading...</div>;
   const SROWS=['Raw Materials','Work in Progress','Finished Goods','Stores & Spares','Stock in Transit','Total'];
-  const DROWS=['< 30 days','30-60 days','60-90 days','90-180 days','> 180 days'];
+  const DROWS=['< 30 days','30-60 days','60-90 days','90-120 days','120-180 days','> 180 days'];
   const stocks=data.stocks||SROWS.map(()=>({}));
   const debtors=data.debtors||DROWS.map(()=>({}));
   const ratings=[{r:'1',label:'Excellent',desc:'Negligible risk'},{r:'2',label:'Good',desc:'Low risk'},{r:'3',label:'Satisfactory',desc:'Manageable'},{r:'4',label:'Below Avg',desc:'Significant gaps'},{r:'5',label:'Poor',desc:'Deficiencies'},{r:'6',label:'Unsatisfactory',desc:'Critical'}];
@@ -572,51 +562,60 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
         })}</tbody></table></div>
         <div style={{background:'rgba(96,165,250,.08)',border:'1.5px solid var(--blue)',borderRadius:10,padding:'14px 16px',margin:'14px 0'}}>
           <div style={{fontWeight:700,fontSize:13,color:'var(--blue)',marginBottom:10}}>Drawing Power Calculator</div>
-          <div className="fg3" style={{marginBottom:10}}>
+          <div className="fg3" style={{marginBottom:6}}>
             <div className="fg"><label>Stock Margin % (bank norm)</label><input type="number" value={data.stock_margin_pct||25} onChange={e=>set('stock_margin_pct',e.target.value)} disabled={readOnly} min={0} max={100}/></div>
             <div className="fg"><label>Debtor Margin % (bank norm)</label><input type="number" value={data.debtor_margin_pct||40} onChange={e=>set('debtor_margin_pct',e.target.value)} disabled={readOnly} min={0} max={100}/></div>
-            <div className="fg"><label>% Non-Moving / Dead Stock</label><input type="number" value={data.stock_dead_pct||''} onChange={e=>set('stock_dead_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
+            <div className="fg"><label>Total Creditors (Rs.) — deducted from DP</label><input type="number" value={data.total_creditors||''} onChange={e=>set('total_creditors',e.target.value)} disabled={readOnly} placeholder="0"/></div>
+          </div>
+          <div className="fg2" style={{marginBottom:10}}>
+            <div className="fg"><label>% Slow-Moving Stock <span style={{color:'var(--amber)',fontSize:11}}>(auto-excluded from DP)</span></label><input type="number" value={data.stock_slow_pct||''} onChange={e=>set('stock_slow_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
+            <div className="fg"><label>% Dead / Non-Moving Stock <span style={{color:'var(--red)',fontSize:11}}>(auto-excluded from DP)</span></label><input type="number" value={data.stock_dead_pct||''} onChange={e=>set('stock_dead_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,fontSize:12}}>
-            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Stocks</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.goodStock.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Physical less dead stock</div></div>
-            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Debtors (&lt;90d)</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.eligDebtors.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Debtors aged under 90 days</div></div>
+            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Stocks</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.goodStock.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Physical less slow-moving &amp; dead stock</div></div>
+            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Debtors</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.eligDebtors.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>&lt;90 days, excl. group debtors</div></div>
             <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Gross DP</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.grossDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Stock@{Math.round(dpCalc.sMargin*100)}% + Debtor@{Math.round(dpCalc.dMargin*100)}% margin, less creditors</div></div>
             <div style={{background:dpCalc.finalDP<dpCalc.outstanding?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)',borderRadius:8,padding:'8px 10px',border:'1px solid '+(dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)')}}><div style={{color:'var(--gray)',marginBottom:2}}>Final DP (capped)</div><div style={{fontWeight:700,fontSize:14,color:dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)'}}>Rs.{dpCalc.finalDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Min of Gross DP & Sanctioned limit</div></div>
           </div>
           {dpCalc.finalDP<dpCalc.outstanding&&<div style={{marginTop:10,color:'var(--red)',fontWeight:600,fontSize:12.5}}>INADEQUATE DP — Outstanding Rs.{dpCalc.outstanding.toLocaleString('en-IN')} exceeds Audit DP Rs.{dpCalc.finalDP.toLocaleString('en-IN')} by Rs.{(dpCalc.outstanding-dpCalc.finalDP).toLocaleString('en-IN')}</div>}
           {!readOnly&&dpCalc.grossDP>0&&<button type="button" style={{marginTop:10,fontSize:12,background:'var(--blue)',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',cursor:'pointer',fontWeight:600}} onClick={()=>set('dp_audit',String(dpCalc.finalDP))}>Apply Rs.{dpCalc.finalDP.toLocaleString('en-IN')} to DP as per Audit</button>}
         </div>
-        <div className="fg2"><div className="fg"><label>% Good / Active Stock</label><input value={data.stock_good_pct||''} onChange={e=>set('stock_good_pct',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>% Slow Moving</label><input value={data.stock_slow_pct||''} onChange={e=>set('stock_slow_pct',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg"><label>% Good / Active Stock (informational)</label><input value={data.stock_good_pct||''} onChange={e=>set('stock_good_pct',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Storage & Quality Observations</label><textarea value={data.stock_observations||''} onChange={e=>set('stock_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
 
       <div className="rpt-section"><div className="rpt-sh">Section 3 — Book Debts / Debtors Analysis</div><div className="rpt-body">
-        <div className="fg2"><div className="fg"><label>Total Debtors (Rs.)</label><input value={data.total_debtors||''} onChange={e=>set('total_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Debtors eligible for DP (Rs.)</label><input value={data.dp_debtors||''} onChange={e=>set('dp_debtors',e.target.value)} disabled={readOnly} placeholder="Used for DP calculation"/></div></div>
-        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>(<tr key={row}><td style={{fontWeight:600,fontSize:12.5}}>{row}</td><td><input value={(debtors[i]&&debtors[i].amount)||''} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td><td><input value={(debtors[i]&&debtors[i].pct)||''} readOnly style={{background:'var(--gray-l)',cursor:'default'}}/></td><td><input value={(debtors[i]&&debtors[i].remarks)||''} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td></tr>))}</tbody></table></div>
-        <div className="fg2" style={{marginTop:12}}><div className="fg"><label>Disputed / Sticky Debtors (Rs.)</label><input value={data.disputed_debtors||''} onChange={e=>set('disputed_debtors',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Related Party Debtors (Rs.)</label><input value={data.related_debtors||''} onChange={e=>set('related_debtors',e.target.value)} disabled={readOnly}/></div></div>
+        <div className="fg"><label>Total Debtors (Rs.)</label><input value={data.total_debtors||''} onChange={e=>set('total_debtors',e.target.value)} disabled={readOnly}/></div>
+        <div style={{fontSize:12,color:'var(--gray)',marginBottom:8}}>Mark debtors as "Group" to auto-exclude them from DP. Debtors beyond 90 days are already excluded.</div>
+        <div style={{overflowX:'auto'}}><table className="rpt-tbl"><thead><tr><th>Aging Bucket</th><th>Amount (Rs.)</th><th>% of Total</th><th>Group Debtor?</th><th>Remarks</th></tr></thead><tbody>{DROWS.map((row,i)=>{
+          const isGroup=(debtors[i]&&debtors[i].group_debtor)==='Yes';
+          return(<tr key={row} style={isGroup?{background:'var(--amber-l)'}:{}}>
+            <td style={{fontWeight:600,fontSize:12.5}}>{row}</td>
+            <td><input value={(debtors[i]&&debtors[i].amount)||''} onChange={e=>setDebt(i,'amount',e.target.value)} disabled={readOnly}/></td>
+            <td><input value={(debtors[i]&&debtors[i].pct)||''} readOnly style={{background:'var(--gray-l)',cursor:'default'}}/></td>
+            <td><select value={(debtors[i]&&debtors[i].group_debtor)||'No'} onChange={e=>setDebt(i,'group_debtor',e.target.value)} disabled={readOnly} style={{background:isGroup?'var(--amber-m)':'',fontWeight:isGroup?700:400,color:isGroup?'var(--amber)':''}}><option>No</option><option>Yes</option></select></td>
+            <td><input value={(debtors[i]&&debtors[i].remarks)||''} onChange={e=>setDebt(i,'remarks',e.target.value)} disabled={readOnly}/></td>
+          </tr>);
+        })}</tbody></table></div>
+        <div className="fg" style={{marginTop:12}}><label>Disputed / Sticky Debtors (Rs.)</label><input value={data.disputed_debtors||''} onChange={e=>set('disputed_debtors',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Observations</label><textarea value={data.debtor_observations||''} onChange={e=>set('debtor_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
 
-      <div className="rpt-section"><div className="rpt-sh">Section 4 — Creditors</div><div className="rpt-body">
-        <div className="fg2"><div className="fg"><label>Total Creditors (Rs.)</label><input value={data.total_creditors||''} onChange={e=>set('total_creditors',e.target.value)} disabled={readOnly} placeholder="Deducted in DP calc"/></div><div className="fg"><label>Creditors &gt; 90 days (Rs.)</label><input value={data.old_creditors||''} onChange={e=>set('old_creditors',e.target.value)} disabled={readOnly}/></div></div>
-        <div className="fg"><label>Observations</label><textarea value={data.creditor_observations||''} onChange={e=>set('creditor_observations',e.target.value)} disabled={readOnly}/></div>
-      </div></div>
-
-      <div className="rpt-section"><div className="rpt-sh">Section 5 — Insurance</div><div className="rpt-body">
+      <div className="rpt-section"><div className="rpt-sh">Section 4 — Insurance</div><div className="rpt-body">
         <div className="fg3"><div className="fg"><label>Insurer</label><input value={data.insurer||''} onChange={e=>set('insurer',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Policy No.</label><input value={data.policy_no||''} onChange={e=>set('policy_no',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Expiry Date</label><input type="date" value={data.policy_expiry||''} onChange={e=>set('policy_expiry',e.target.value)} disabled={readOnly}/></div></div>
         <div className="fg3"><div className="fg"><label>Sum Insured (Rs.)</label><input value={data.sum_insured||''} onChange={e=>set('sum_insured',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Coverage</label><select value={data.coverage_type||''} onChange={e=>set('coverage_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Fire','Burglary','Flood','All Risk','Marine'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Bank Shown as Mortgagee?</label><select value={data.bank_mortgagee||''} onChange={e=>set('bank_mortgagee',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Yes</option><option>No</option></select></div></div>
         {data.sum_insured&&data.outstanding&&parseFloat(data.sum_insured)<parseFloat(data.outstanding)&&<div style={{color:'var(--red)',fontWeight:600,fontSize:12.5,marginBottom:8}}>Insurance Inadequate: Sum insured Rs.{(parseFloat(data.sum_insured)||0).toLocaleString('en-IN')} is less than outstanding Rs.{(parseFloat(data.outstanding)||0).toLocaleString('en-IN')}</div>}
         <div className="fg"><label>Adequacy Remarks</label><textarea value={data.insurance_observations||''} onChange={e=>set('insurance_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
 
-      <div className="rpt-section"><div className="rpt-sh">Section 6 — Observations & Compliance</div><div className="rpt-body">
+      <div className="rpt-section"><div className="rpt-sh">Section 5 — Observations & Compliance</div><div className="rpt-body">
         <div className="fg"><label>Record Keeping & Accounting</label><textarea value={data.records_obs||''} onChange={e=>set('records_obs',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Operations & Business Activity</label><textarea value={data.ops_obs||''} onChange={e=>set('ops_obs',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Key Discrepancies Noted</label><textarea value={data.discrepancies||''} onChange={e=>set('discrepancies',e.target.value)} disabled={readOnly}/></div>
         <div className="fg"><label>Sanction Compliance</label><select value={data.sanction_compliance||''} onChange={e=>set('sanction_compliance',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Fully Compliant</option><option>Minor Deviations</option><option>Significant Deviations</option><option>Non-Compliant</option></select></div>
       </div></div>
 
-      <div className="rpt-section"><div className="rpt-sh">Section 7 — Rating & Certification</div><div className="rpt-body">
+      <div className="rpt-section"><div className="rpt-sh">Section 6 — Rating & Certification</div><div className="rpt-body">
         <label style={{marginBottom:10,display:'block'}}>Overall Rating (1 = Best, 6 = Unsatisfactory)</label>
         <div className="rating-grid" style={{marginBottom:16}}>{ratings.map(r=>(<div key={r.r} className={`r-btn ${data.rating===r.r?'selected':''}`} onClick={()=>!readOnly&&set('rating',r.r)}><div style={{fontSize:20,fontWeight:800,color:data.rating===r.r?'var(--blue)':'var(--gray)'}}>{r.r}</div><div style={{fontSize:11,fontWeight:700,marginTop:2}}>{r.label}</div><div style={{fontSize:10,color:'var(--gray)',marginTop:1}}>{r.desc}</div></div>))}</div>
         <div className="fg"><label>Recommendations to Bank</label><textarea value={data.recommendations||''} onChange={e=>set('recommendations',e.target.value)} disabled={readOnly}/></div>
