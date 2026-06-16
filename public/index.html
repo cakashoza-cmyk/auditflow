@@ -977,7 +977,7 @@ function CAPublicProfilePage({user,setPage}){
   const appUrl=(window.location.origin);
   useEffect(()=>{API.get('/api/auth/me').then(u=>{if(u&&u.id)setFreshUser(u);});},[]);
   const icai=freshUser.icai_no||user.icai_no;
-  const profileUrl=icai?`${appUrl}/profile/ca/${icai}`:null;
+  const profileUrl=icai?`${appUrl}/ca/${icai}`:null;
   useEffect(()=>{if(icai)API.get(`/api/profile/ca/${icai}`).then(setProfile);},[icai]);
   function copyLink(){if(profileUrl){navigator.clipboard.writeText(profileUrl);alert('Profile link copied! Share it with bankers to showcase your credentials.');}}
   if(!user.icai_no)return(<div className="page"><div className="card" style={{padding:24,textAlign:'center'}}><div style={{fontSize:32,marginBottom:12}}>🌟</div><div style={{fontWeight:700,fontSize:16,marginBottom:8}}>Complete Your Profile First</div><div style={{color:'var(--gray)',marginBottom:16}}>Add your ICAI Membership Number in Settings to activate your public profile.</div><button className="btn btn-p" onClick={()=>setPage('profile')}>Go to Settings →</button></div></div>);
@@ -996,7 +996,7 @@ function CAPublicProfilePage({user,setPage}){
       </div>
       <div style={{padding:24}}>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:12,marginBottom:24}}>
-          {[{v:profile.finalized_audits||0,l:'Audits Completed'},{v:profile.total_audits||0,l:'Total Assigned'},{v:profile.avg_rating?stars(profile.avg_rating)+' '+profile.avg_rating+'/5':'No ratings',l:'Avg Rating'},{v:profile.total_exposure_cr?'₹'+profile.total_exposure_cr+'Cr':'—',l:'Exposure Audited'},{v:profile.on_time_rate!==null?profile.on_time_rate+'%':'—',l:'On-Time Rate'},{v:profile.banks_worked_with||0,l:'Banks Served'}].map(s=>(
+          {[{v:profile.finalized_audits||0,l:'Audits Completed'},{v:profile.total_audits||0,l:'Total Assigned'},{v:profile.avg_rating?stars(profile.avg_rating)+' '+profile.avg_rating+'/5':'No ratings',l:'Avg Rating'},{v:profile.total_exposure_cr?'₹'+profile.total_exposure_cr+'Cr':'—',l:'Exposure Audited'},{v:profile.on_time_rate!==null?profile.on_time_rate+'%':'—',l:'On-Time Rate'},{v:(Array.isArray(profile.banks_worked_with)?profile.banks_worked_with.length:profile.banks_worked_with)||0,l:'Banks Served'}].map(s=>(
             <div key={s.l} style={{background:'#f8fafc',borderRadius:12,padding:14,textAlign:'center'}}>
               <div style={{fontSize:20,fontWeight:800,color:'#1d4ed8'}}>{s.v}</div>
               <div style={{fontSize:11,color:'var(--gray)',marginTop:2}}>{s.l}</div>

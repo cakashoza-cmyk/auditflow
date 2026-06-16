@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CA Profile — AuditFlow</title>
+<meta name="description" content="Verified CA profile on AuditFlow — India's stock audit management platform"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1a202c;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* NAV */
+.nav{background:#0f172a;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-size:16px;font-weight:800;color:#fff;letter-spacing:-.3px}
+.nav-logo span{color:#60a5fa}
+.nav-cta{background:#2563eb;color:#fff;padding:7px 16px;border-radius:7px;font-size:13px;font-weight:600}
+
+/* HERO CARD */
+.hero{max-width:780px;margin:36px auto 0;padding:0 16px}
+.profile-card{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden}
+.profile-top{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);padding:32px 32px 80px;position:relative}
+.verified-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#86efac;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.4px;margin-bottom:14px}
+.ca-name{font-size:26px;font-weight:800;color:#fff;line-height:1.2;margin-bottom:4px}
+.ca-firm{font-size:14px;color:#94a3b8;margin-bottom:6px}
+.ca-meta{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.ca-meta-item{display:flex;align-items:center;gap:5px;font-size:12.5px;color:#cbd5e1}
+
+/* AVATAR */
+.avatar{width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:#fff;border:3px solid #fff;position:absolute;bottom:-34px;left:32px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+
+/* STATS STRIP */
+.stats-strip{display:grid;grid-template-columns:repeat(4,1fr);padding:52px 32px 24px;gap:0;border-bottom:1px solid #f1f5f9}
+.stat{text-align:center;padding:0 12px}
+.stat+.stat{border-left:1px solid #f1f5f9}
+.stat-val{font-size:24px;font-weight:800;color:#0f172a;line-height:1}
+.stat-lbl{font-size:11px;color:#6b7280;margin-top:5px;font-weight:500}
+
+/* RATING STARS */
+.stars{display:flex;gap:2px;justify-content:center;margin-top:4px}
+.star{font-size:14px;line-height:1}
+.star.on{color:#f59e0b}
+.star.off{color:#e5e7eb}
+
+/* BODY */
+.profile-body{padding:24px 32px 28px}
+.section-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.7px;margin-bottom:12px}
+.banks-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.bank-chip{background:#f0f9ff;border:1.5px solid #bae6fd;color:#0369a1;font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px}
+.bank-chip.empty{background:#f9fafb;border-color:#e5e7eb;color:#9ca3af}
+.exposure-bar{background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+.exposure-val{font-size:20px;font-weight:800;color:#0f172a}
+.exposure-lbl{font-size:11.5px;color:#6b7280;margin-top:2px}
+
+/* CTA SECTION */
+.cta-box{background:linear-gradient(135deg,#1e3a5f,#0f172a);border-radius:12px;padding:22px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.cta-text{color:#e2e8f0;font-size:13.5px;line-height:1.6}
+.cta-text strong{color:#fff;font-size:15px;display:block;margin-bottom:3px}
+.cta-btn{background:#2563eb;color:#fff;padding:11px 22px;border-radius:9px;font-size:13.5px;font-weight:700;white-space:nowrap;flex-shrink:0;display:inline-block;box-shadow:0 4px 12px rgba(37,99,235,.35)}
+.cta-btn:hover{background:#1d4ed8}
+
+/* FOOTER */
+.footer{text-align:center;padding:24px;font-size:12px;color:#9ca3af;margin-top:8px}
+.footer a{color:#6b7280;font-weight:600}
+
+/* LOADING / ERROR */
+.state-box{text-align:center;padding:80px 24px}
+.state-icon{font-size:48px;margin-bottom:12px}
+.state-title{font-size:18px;font-weight:700;color:#0f172a;margin-bottom:6px}
+.state-sub{font-size:13.5px;color:#6b7280}
+
+/* RESPONSIVE */
+@media(max-width:600px){
+  .stats-strip{grid-template-columns:repeat(2,1fr);padding-top:52px}
+  .stat:nth-child(3){border-left:none}
+  .stat:nth-child(n+3){margin-top:14px;padding-top:14px;border-top:1px solid #f1f5f9}
+  .profile-top{padding-bottom:70px}
+  .exposure-bar{flex-direction:column;align-items:flex-start;gap:4px}
+  .cta-box{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">Audit<span>Flow</span></div>
+  <a href="/app" class="nav-cta">Login / Register</a>
+</nav>
+
+<div class="hero" id="root">
+  <div class="state-box">
+    <div class="state-icon">⏳</div>
+    <div class="state-title">Loading profile…</div>
+  </div>
+</div>
+
+<div class="footer">
+  Powered by <a href="/">AuditFlow</a> · India's stock audit management platform
+</div>
+
+<script>
+(function(){
+  var icai = location.pathname.split('/ca/')[1] || '';
+  if(!icai){ showError('No ICAI number provided.'); return; }
+
+  fetch('/api/profile/ca/' + encodeURIComponent(icai))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.error){ showError('CA profile not found.'); return; }
+      render(d);
+    })
+    .catch(function(){ showError('Could not load profile. Please try again.'); });
+
+  function initials(name){
+    if(!name) return '?';
+    var parts = name.trim().split(' ');
+    return parts.length >= 2 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : parts[0].substring(0,2).toUpperCase();
+  }
+
+  function fmtCr(val){
+    if(!val) return '—';
+    var cr = val / 1e7;
+    if(cr >= 100) return Math.round(cr) + ' Cr';
+    if(cr >= 10) return cr.toFixed(1) + ' Cr';
+    if(cr >= 1) return cr.toFixed(2) + ' Cr';
+    var lakh = val / 1e5;
+    return lakh.toFixed(1) + ' L';
+  }
+
+  function stars(avg){
+    if(!avg) return '<span style="font-size:12px;color:#9ca3af">Not yet rated</span>';
+    var html = '<div class="stars">';
+    for(var i=1;i<=5;i++){
+      html += '<span class="star '+(i<=Math.round(avg)?'on':'off')+'">★</span>';
+    }
+    html += '</div><div style="font-size:11px;color:#6b7280;margin-top:3px">'+avg.toFixed(1)+' / 5</div>';
+    return html;
+  }
+
+  function render(d){
+    var banks = d.banks_worked_with || [];
+    var banksHtml = banks.length
+      ? banks.map(function(b){ return '<span class="bank-chip">🏦 '+esc(b)+'</span>'; }).join('')
+      : '<span class="bank-chip empty">No audits logged yet</span>';
+
+    var shareUrl = window.location.href;
+
+    document.getElementById('root').innerHTML =
+      '<div class="profile-card">'
+
+      // TOP
+      +'<div class="profile-top">'
+        +'<div class="verified-badge">✓ Verified CA on AuditFlow</div>'
+        +'<div class="ca-name">'+esc(d.name)+'</div>'
+        +(d.firm_name?'<div class="ca-firm">'+esc(d.firm_name)+(d.firm_reg_no?' &nbsp;·&nbsp; FRN: '+esc(d.firm_reg_no):'')+'</div>':'')
+        +'<div class="ca-meta">'
+          +(d.icai_no?'<span class="ca-meta-item">🪪 ICAI: '+esc(d.icai_no)+'</span>':'')
+          +(d.city?'<span class="ca-meta-item">📍 '+esc(d.city)+'</span>':'')
+        +'</div>'
+        +'<div class="avatar">'+initials(d.name)+'</div>'
+      +'</div>'
+
+      // STATS
+      +'<div class="stats-strip">'
+        +'<div class="stat"><div class="stat-val">'+d.total_audits+'</div><div class="stat-lbl">Total Audits</div></div>'
+        +'<div class="stat"><div class="stat-val">'+d.finalized_audits+'</div><div class="stat-lbl">Completed</div></div>'
+        +'<div class="stat"><div class="stat-val">'+banks.length+'</div><div class="stat-lbl">Banks Served</div></div>'
+        +'<div class="stat">'+stars(d.avg_rating)+'<div class="stat-lbl">Avg Rating'+(d.total_ratings?' ('+d.total_ratings+')')+'</div></div>'
+      +'</div>'
+
+      // BODY
+      +'<div class="profile-body">'
+
+        // Exposure
+        +(d.total_exposure>0
+          ?'<div class="exposure-bar"><div><div class="exposure-val">Rs. '+fmtCr(d.total_exposure)+'</div><div class="exposure-lbl">Total credit exposure audited (finalized audits)</div></div><span style="font-size:28px">🏦</span></div>'
+          :'')
+
+        // Banks
+        +'<div class="section-label">Banks Worked With</div>'
+        +'<div class="banks-grid">'+banksHtml+'</div>'
+
+        // CTA
+        +'<div class="cta-box">'
+          +'<div class="cta-text"><strong>Need a stock audit?</strong>Initiate digitally through AuditFlow — documents collected online, no back-and-forth.</div>'
+          +'<a href="/app" class="cta-btn">Start an Audit →</a>'
+        +'</div>'
+
+      +'</div>'
+      +'</div>';
+
+    // Update page title
+    document.title = esc(d.name) + (d.firm_name?' — '+esc(d.firm_name):'') + ' | AuditFlow';
+  }
+
+  function showError(msg){
+    document.getElementById('root').innerHTML =
+      '<div class="state-box">'
+        +'<div class="state-icon">🔍</div>'
+        +'<div class="state-title">Profile Not Found</div>'
+        +'<div class="state-sub">'+msg+'</div>'
+        +'<a href="/app" style="display:inline-block;margin-top:18px;background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;font-weight:700;font-size:13px">Go to AuditFlow →</a>'
+      +'</div>';
+  }
+
+  function esc(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
+</script>
+</body>
+</html>

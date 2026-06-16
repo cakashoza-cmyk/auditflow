@@ -898,12 +898,20 @@ app.get('/api/profile/ca/:icai_no', function(req, res) {
   const ca = dbFind('users', { role: 'ca' }).find(function(u) { return u.icai_no === req.params.icai_no; });
   if (!ca) return res.status(404).json({ error: 'CA not found' });
   const myAudits = dbFind('audits').filter(function(a) { return a.ca_id == ca.id; });
+  const finalized = myAudits.filter(function(a) { return a.stage === 'finalized'; });
+  const banks = [...new Set(myAudits.map(function(a) { return a.bank_name; }).filter(Boolean))];
+  const totalExposure = finalized.reduce(function(sum, a) {
+    const rpt = a.report && a.report.data;
+    return sum + (parseFloat(rpt && rpt.sanctioned_limit) || parseFloat(a.sanctioned_limit) || 0);
+  }, 0);
   res.json({
     name: ca.name, icai_no: ca.icai_no, firm_name: ca.firm_name,
-    firm_reg_no: ca.firm_reg_no, city: ca.city, phone: ca.phone,
+    firm_reg_no: ca.firm_reg_no, city: ca.city,
     avg_rating: ca.avg_rating || null, total_ratings: ca.total_ratings || 0,
     total_audits: myAudits.length,
-    finalized_audits: myAudits.filter(function(a) { return a.stage === 'finalized'; }).length
+    finalized_audits: finalized.length,
+    banks_worked_with: banks,
+    total_exposure: Math.round(totalExposure)
   });
 });
 
@@ -922,6 +930,11 @@ app.get('/landing.html', function(req, res) {
 // ── APP (login/dashboard) ─────────────────────────────────────────────────────
 app.get('/app', function(req, res) {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ── PUBLIC CA PROFILE ─────────────────────────────────────────────────────────
+app.get('/ca/:icai_no', function(req, res) {
+  res.sendFile(path.join(__dirname, 'public', 'ca-profile.html'));
 });
 
 // ── CATCH-ALL (serve React SPA) ───────────────────────────────────────────────
