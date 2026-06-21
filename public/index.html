@@ -6,6 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1a202c;font-size:14px}
@@ -1109,29 +1110,54 @@ function AuthScreen({onLogin}){
   const urlAction=new URLSearchParams(window.location.search).get('action');
   const[mode,setMode]=useState(urlRef||urlAction==='referral'?'register':'login');
   const[role,setRole]=useState('ca');
+  const[org,setOrg]=useState('');
+  const[hdfcRole,setHdfcRole]=useState('cm');
   const[form,setForm]=useState({name:'',email:'',password:'',phone:'',city:'',address:'',icai_no:'',firm_name:'',firm_reg_no:'',bank_name:'',branch:'',gstin:'',pan:'',constitution:'Proprietorship',referred_by:urlRef||''});
   const[err,setErr]=useState('');
   const[loading,setLoading]=useState(false);
+  const isHDFC=org==='hdfc';
   function set(k,v){setForm(p=>({...p,[k]:v}));}
-  async function submit(e){e.preventDefault();setErr('');setLoading(true);const url=mode==='login'?'/api/auth/login':'/api/auth/register';const body=mode==='login'?{email:form.email,password:form.password}:{...form,role};const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());setLoading(false);if(r.error){setErr(r.error);return;}localStorage.setItem('af_token',r.token);onLogin(r.user);}
+  async function submit(e){
+    e.preventDefault();setErr('');setLoading(true);
+    const url=mode==='login'?'/api/auth/login':'/api/auth/register';
+    const body=mode==='login'?{email:form.email,password:form.password,org}:{...form,role:isHDFC?'banker':role,org,hdfc_role:isHDFC?hdfcRole:undefined};
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+    setLoading(false);if(r.error){setErr(r.error);return;}
+    localStorage.setItem('af_token',r.token);onLogin(r.user);
+  }
   return(<div className="auth-wrap"><div className="auth-card">
-    <div className="auth-logo">⚡ AuditFlow</div>
-    <div style={{fontSize:13,color:'var(--gray)',marginBottom:20}}>Stock Audit Platform — CAs · Banks · Borrowers</div>
+    {isHDFC
+      ?<><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}><div style={{background:'#004C8F',color:'#fff',fontWeight:900,fontSize:18,padding:'4px 10px',borderRadius:6,letterSpacing:1}}>HDFC</div><div style={{fontWeight:800,fontSize:16,color:'#004C8F'}}>Bank</div></div><div style={{fontSize:12,color:'var(--gray)',marginBottom:16}}>Stock Audit Portal · Powered by AuditFlow</div></>
+      :<><div className="auth-logo">⚡ AuditFlow</div><div style={{fontSize:13,color:'var(--gray)',marginBottom:16}}>Stock Audit Platform — CAs · Banks · Borrowers</div></>
+    }
+    <div className="fg" style={{marginBottom:14}}>
+      <label>Organisation</label>
+      <select value={org} onChange={e=>{setOrg(e.target.value);setErr('');}} style={{fontWeight:600}}>
+        <option value="">Standard / Independent</option>
+        <option value="hdfc">HDFC Bank</option>
+      </select>
+    </div>
     {mode==='register'&&urlRef&&<div style={{background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:13,color:'#1e429f'}}>🎁 You were referred! Register below to activate your <strong>12 months free</strong> Founding Member access.</div>}
-    <div className="role-tabs">{[['ca','CA'],['banker','Banker'],['borrower','Borrower']].map(([r,l])=><div key={r} className={`role-tab ${role===r?'active':''}`} onClick={()=>{setRole(r);setErr('');}}>{l}</div>)}</div>
+    {!isHDFC&&<div className="role-tabs">{[['ca','CA'],['banker','Banker'],['borrower','Borrower']].map(([r,l])=><div key={r} className={`role-tab ${role===r?'active':''}`} onClick={()=>{setRole(r);setErr('');}}>{l}</div>)}</div>}
+    {isHDFC&&mode==='login'&&<div style={{background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12.5,color:'#1e3a8a'}}>Use your HDFC email ID and the temporary password sent to you.</div>}
     {err&&<div className="alert alert-r" style={{marginBottom:12}}>{err}</div>}
     <form onSubmit={submit}>
       {mode==='register'&&<div className="fg"><label>Full Name</label><input value={form.name} onChange={e=>set('name',e.target.value)} required/></div>}
       <div className="fg"><label>Email</label><input type="email" value={form.email} onChange={e=>set('email',e.target.value)} required placeholder="your@email.com"/></div>
       <div className="fg"><label>Password</label><input type="password" value={form.password} onChange={e=>set('password',e.target.value)} required/></div>
-      {mode==='register'&&<>
+      {mode==='register'&&isHDFC&&<>
+        <div className="fg"><label>Your Role at HDFC</label><select value={hdfcRole} onChange={e=>setHdfcRole(e.target.value)}><option value="cm">Credit Manager (CM / Branch Manager)</option><option value="supervisor">Supervisor</option></select></div>
+        <div className="fg"><label>Branch</label><input value={form.branch} onChange={e=>set('branch',e.target.value)} placeholder="e.g. Mumbai Bandra Branch"/></div>
+        {hdfcRole==='supervisor'&&<div className="fg"><label>CM / Credit Manager Email</label><input type="email" value={form.bank_name} onChange={e=>set('bank_name',e.target.value)} placeholder="cm@hdfcbank.com"/></div>}
+      </>}
+      {mode==='register'&&!isHDFC&&<>
         <div className="fg2"><div className="fg"><label>Phone</label><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></div><div className="fg"><label>City</label><input value={form.city} onChange={e=>set('city',e.target.value)}/></div></div>
         <div className="fg"><label>Full Address</label><input value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Street, Area, City, PIN"/></div>
         {role==='ca'&&<><div className="fg2"><div className="fg"><label>ICAI Membership No.</label><input value={form.icai_no} onChange={e=>set('icai_no',e.target.value)} placeholder="Individual (e.g. 112847)"/></div><div className="fg"><label>Firm Reg. No. (FRN)</label><input value={form.firm_reg_no} onChange={e=>set('firm_reg_no',e.target.value)} placeholder="e.g. 123456W"/></div></div><div className="fg"><label>Firm Name</label><input value={form.firm_name} onChange={e=>set('firm_name',e.target.value)}/></div></>}
         {role==='banker'&&<div className="fg2"><div className="fg"><label>Bank Name</label><input value={form.bank_name} onChange={e=>set('bank_name',e.target.value)}/></div><div className="fg"><label>Branch</label><input value={form.branch} onChange={e=>set('branch',e.target.value)}/></div></div>}
         {role==='borrower'&&<div className="fg"><label>Constitution</label><select value={form.constitution} onChange={e=>set('constitution',e.target.value)}>{['Proprietorship','Partnership','LLP','Private Limited','Public Limited'].map(o=><option key={o}>{o}</option>)}</select></div>}
       </>}
-      <button type="submit" className="btn btn-p" style={{width:'100%',justifyContent:'center',marginTop:8}} disabled={loading}>{loading?'Please wait…':mode==='login'?'Login →':'Create Account →'}</button>
+      <button type="submit" className="btn btn-p" style={{width:'100%',justifyContent:'center',marginTop:8,background:isHDFC?'#004C8F':undefined}} disabled={loading}>{loading?'Please wait…':mode==='login'?'Login →':'Create Account →'}</button>
     </form>
     <div style={{textAlign:'center',marginTop:14,fontSize:13,color:'var(--gray)'}}>
       {mode==='login'?<>No account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('register');setErr('');}}>Register</span></>:<>Have account? <span style={{color:'var(--blue)',cursor:'pointer',fontWeight:600}} onClick={()=>{setMode('login');setErr('');}}>Login</span></>}
@@ -1200,6 +1226,442 @@ function CAPublicProfilePage({user,setPage}){
   </div>);
 }
 
+// ── HDFC HELPERS ──────────────────────────────────────────────────────────────
+function dueDays(d){if(!d)return null;const diff=Math.round((new Date(d)-new Date())/(1000*60*60*24));return diff;}
+function dueBadge(d){const n=dueDays(d);if(n===null)return<span style={{color:'var(--gray)'}}>—</span>;if(n<0)return<span style={{color:'#7f1d1d',fontWeight:700,fontSize:11,background:'#fee2e2',padding:'2px 7px',borderRadius:20}}>⚠ Overdue {Math.abs(n)}d</span>;if(n<15)return<span style={{color:'var(--red)',fontWeight:700,fontSize:11,background:'#fee2e2',padding:'2px 7px',borderRadius:20}}>🔴 {n}d left</span>;if(n<30)return<span style={{color:'var(--amber)',fontWeight:700,fontSize:11,background:'#fef3c7',padding:'2px 7px',borderRadius:20}}>🟡 {n}d left</span>;return<span style={{color:'var(--green)',fontWeight:700,fontSize:11,background:'#dcfce7',padding:'2px 7px',borderRadius:20}}>🟢 {n}d left</span>;}
+function hdfcStatusBadge(s){const m={pending:['#f3f4f6','#374151','⏳ Pending'],rm_confirmed:['#dbeafe','#1e40af','📞 RM Confirmed'],doc_requested:['#ede9fe','#5b21b6','📋 Doc Requested'],ca_working:['#fef3c7','#92400e','🔍 CA Working'],submitted:['#d1fae5','#065f46','📤 Submitted'],approved:['#bbf7d0','#14532d','✅ Approved']};const v=m[s]||m['pending'];return<span style={{background:v[0],color:v[1],fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:20}}>{v[2]}</span>;}
+const HDFC_DOCS=['Stock Statement (latest date)','Debtors Statement with Aging','Insurance Policy copies','Creditors List','Audited Financial Statements / IT Returns','Sanction Letter / CC Limit Letter','Drawing Power Statement','Stock Inspection Book (if any)'];
+
+// ── HDFC BORROWER PORTAL ──────────────────────────────────────────────────────
+function HDFCBorrowerPortal(){
+  const{user}=useContext(AuthCtx);
+  const[accounts,setAccounts]=useState([]);
+  const[sel,setSel]=useState(null);
+  const[saving,setSaving]=useState(false);
+  useEffect(function(){API.get('/api/hdfc/accounts').then(function(d){if(Array.isArray(d))setAccounts(d);});},[]);
+  async function saveDocs(id,docs,visitDate){
+    setSaving(true);
+    await API.put('/api/hdfc/accounts/'+id,{borrower_docs:docs,visit_date:visitDate});
+    const updated=await API.get('/api/hdfc/accounts');
+    if(Array.isArray(updated)){setAccounts(updated);const u=updated.find(function(a){return a.id===id;});if(u)setSel(u);}
+    setSaving(false);
+  }
+  if(sel){
+    const docs=sel.borrower_docs||{};
+    const allTicked=HDFC_DOCS.every(function(d){return docs[d];});
+    return(<div className="page">
+      <button className="btn btn-o btn-sm" style={{marginBottom:16}} onClick={function(){setSel(null);}}>← Back</button>
+      <div className="card">
+        <h2 style={{fontWeight:800,marginBottom:4}}>{sel.customer_name}</h2>
+        <div style={{color:'var(--gray)',fontSize:13,marginBottom:16}}>Due: {sel.due_date} · {dueBadge(sel.due_date)}</div>
+        <h3 style={{fontWeight:700,marginBottom:12,fontSize:14}}>Document Checklist</h3>
+        <div style={{display:'grid',gap:8,marginBottom:20}}>
+          {HDFC_DOCS.map(function(doc){
+            const checked=!!docs[doc];
+            return(<label key={doc} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:checked?'#f0fdf4':'#f9fafb',borderRadius:8,border:checked?'1.5px solid #86efac':'1.5px solid #e5e7eb',cursor:'pointer',fontWeight:checked?600:400}}>
+              <input type="checkbox" checked={checked} onChange={function(e){const nd={...docs,[doc]:e.target.checked};saveDocs(sel.id,nd,sel.visit_date);}} style={{width:17,height:17,cursor:'pointer'}}/>
+              <span style={{color:checked?'var(--green)':'#374151'}}>{checked?'✅ ':''}{doc}</span>
+            </label>);
+          })}
+        </div>
+        {allTicked&&<div style={{background:'#f0fdf4',border:'1.5px solid #86efac',borderRadius:8,padding:'12px 16px',marginBottom:16,fontWeight:600,color:'var(--green)'}}>All documents ticked! Your auditor will coordinate for the visit.</div>}
+        <div className="fg">
+          <label style={{fontWeight:600,fontSize:13,marginBottom:6,display:'block'}}>Preferred Visit Date</label>
+          <input type="date" value={sel.visit_date||''} style={{maxWidth:220}} onChange={function(e){saveDocs(sel.id,docs,e.target.value);}}/>
+        </div>
+        {saving&&<div style={{color:'var(--gray)',fontSize:12,marginTop:8}}>Saving…</div>}
+      </div>
+    </div>);
+  }
+  return(<div className="page">
+    <h2 style={{fontWeight:800,marginBottom:4}}>My Audits</h2>
+    <div style={{color:'var(--gray)',fontSize:13,marginBottom:20}}>Submit your documents and track audit status.</div>
+    {accounts.length===0?<div className="card" style={{textAlign:'center',color:'var(--gray)',padding:40}}>No audits assigned yet.</div>:accounts.map(function(a){
+      const docs=a.borrower_docs||{};const ticked=HDFC_DOCS.filter(function(d){return docs[d];}).length;
+      return(<div key={a.id} className="card" style={{marginBottom:12,cursor:'pointer'}} onClick={function(){setSel(a);}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'start'}}>
+          <div><div style={{fontWeight:700,fontSize:15}}>{a.customer_name}</div><div style={{color:'var(--gray)',fontSize:12,marginTop:2}}>{a.segment||'Stock Audit'}</div></div>
+          <div style={{textAlign:'right'}}>{dueBadge(a.due_date)}<div style={{color:'var(--gray)',fontSize:11,marginTop:4}}>{ticked}/{HDFC_DOCS.length} docs ticked</div></div>
+        </div>
+        <div style={{marginTop:10,height:6,borderRadius:4,background:'#e5e7eb',overflow:'hidden'}}>
+          <div style={{height:'100%',width:(ticked/HDFC_DOCS.length*100)+'%',background:'var(--blue)',borderRadius:4,transition:'width .3s'}}></div>
+        </div>
+      </div>);
+    })}
+  </div>);
+}
+
+// ── HDFC CA DASHBOARD ─────────────────────────────────────────────────────────
+function HDFCCADashboard(){
+  const[accounts,setAccounts]=useState([]);
+  const[sel,setSel]=useState(null);
+  const[driveLink,setDriveLink]=useState('');
+  const[caNote,setCaNote]=useState('');
+  const[udin,setUdin]=useState('');
+  const[visitDate,setVisitDate]=useState('');
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState('');
+  useEffect(function(){refresh();},[]);
+  function refresh(){API.get('/api/hdfc/accounts').then(function(d){if(Array.isArray(d)){setAccounts(d);}});}
+  function openAcc(a){setSel(a);setDriveLink(a.drive_link||'');setCaNote(a.ca_notes||'');setUdin(a.udin||'');setVisitDate(a.visit_date||'');}
+  async function sendDocRequest(){
+    if(!sel.customer_email){setMsg('Borrower email not entered yet. Ask RM to enter it first.');return;}
+    setSaving(true);setMsg('');
+    const r=await API.post('/api/hdfc/accounts/'+sel.id+'/send-doc-request',{drive_link:driveLink});
+    if(r.ok){setMsg('Doc request email sent to borrower!');const u=await API.get('/api/hdfc/accounts');if(Array.isArray(u)){setAccounts(u);const s=u.find(function(a){return a.id===sel.id;});if(s)setSel(s);}}
+    else setMsg(r.error||'Failed');
+    setSaving(false);
+  }
+  async function saveProgress(newStatus){
+    setSaving(true);setMsg('');
+    const r=await API.put('/api/hdfc/accounts/'+sel.id,{ca_notes:caNote,udin,visit_date:visitDate,status:newStatus||sel.status,drive_link:driveLink});
+    if(r.ok){setMsg('Saved!');refresh();const u=await API.get('/api/hdfc/accounts');if(Array.isArray(u)){setAccounts(u);const s=u.find(function(a){return a.id===sel.id;});if(s)setSel(s);}}
+    else setMsg(r.error||'Failed');
+    setSaving(false);
+  }
+  const pending=accounts.filter(function(a){return a.status==='pending'||a.status==='rm_confirmed';});
+  const active=accounts.filter(function(a){return a.status==='doc_requested'||a.status==='ca_working';});
+  const done=accounts.filter(function(a){return a.status==='submitted'||a.status==='approved';});
+  if(sel){
+    const docs=sel.borrower_docs||{};const ticked=HDFC_DOCS.filter(function(d){return docs[d];}).length;
+    return(<div className="page">
+      <button className="btn btn-o btn-sm" style={{marginBottom:16}} onClick={function(){setSel(null);}}>← Back to Assignments</button>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+        <div className="card">
+          <h2 style={{fontWeight:800,marginBottom:4,fontSize:17}}>{sel.customer_name}</h2>
+          <div style={{color:'var(--gray)',fontSize:12,marginBottom:12}}>{sel.segment||'—'}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+            <div><div style={{fontSize:11,color:'var(--gray)'}}>DUE DATE</div><div style={{fontWeight:700}}>{sel.due_date}</div><div style={{marginTop:4}}>{dueBadge(sel.due_date)}</div></div>
+            <div><div style={{fontSize:11,color:'var(--gray)'}}>STATUS</div><div style={{marginTop:4}}>{hdfcStatusBadge(sel.status)}</div></div>
+            <div><div style={{fontSize:11,color:'var(--gray)'}}>RM</div><div style={{fontWeight:600,fontSize:13}}>{sel.rm_email||'—'}</div></div>
+            <div><div style={{fontSize:11,color:'var(--gray)'}}>BORROWER EMAIL</div><div style={{fontWeight:600,fontSize:13,color:sel.customer_email?'inherit':'var(--amber)'}}>{sel.customer_email||'⚠ Not entered yet'}</div></div>
+          </div>
+          <div className="fg" style={{marginBottom:10}}>
+            <label>Google Drive Link (for docs)</label>
+            <input value={driveLink} onChange={function(e){setDriveLink(e.target.value);}} placeholder="https://drive.google.com/..."/>
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+            <button className="btn btn-p btn-sm" onClick={sendDocRequest} disabled={saving||!sel.customer_email}>{saving?'Sending…':'📋 Send Doc Request Email'}</button>
+            {sel.status==='doc_requested'&&<button className="btn btn-sm" style={{background:'#7c3aed',color:'#fff'}} onClick={function(){saveProgress('ca_working');}}>Mark as Visiting</button>}
+            {sel.status==='ca_working'&&<button className="btn btn-sm" style={{background:'var(--green)',color:'#fff'}} onClick={function(){saveProgress('submitted');}}>✅ Submit to CM</button>}
+          </div>
+          {msg&&<div style={{fontSize:12,color:msg.includes('!')||msg.includes('Saved')?'var(--green)':'var(--red)',marginBottom:8}}>{msg}</div>}
+        </div>
+        <div>
+          <div className="card" style={{marginBottom:12}}>
+            <h3 style={{fontWeight:700,marginBottom:10,fontSize:13}}>Audit Progress</h3>
+            <div className="fg" style={{marginBottom:8}}><label>Visit Date</label><input type="date" value={visitDate} onChange={function(e){setVisitDate(e.target.value);}}/></div>
+            <div className="fg" style={{marginBottom:8}}><label>UDIN (after signing)</label><input value={udin} onChange={function(e){setUdin(e.target.value);}} placeholder="UDIN-XXXX..."/></div>
+            <div className="fg" style={{marginBottom:10}}><label>CA Notes</label><textarea value={caNote} onChange={function(e){setCaNote(e.target.value);}} rows={3} style={{width:'100%',padding:8,borderRadius:6,border:'1px solid var(--gray-m)',fontSize:13}}/></div>
+            <button className="btn btn-p btn-sm" onClick={function(){saveProgress(null);}} disabled={saving}>💾 Save Progress</button>
+          </div>
+          <div className="card">
+            <h3 style={{fontWeight:700,marginBottom:10,fontSize:13}}>Borrower Documents ({ticked}/{HDFC_DOCS.length} ticked)</h3>
+            <div style={{height:6,borderRadius:4,background:'#e5e7eb',overflow:'hidden',marginBottom:10}}>
+              <div style={{height:'100%',width:(HDFC_DOCS.length?ticked/HDFC_DOCS.length*100:0)+'%',background:'var(--blue)',borderRadius:4}}></div>
+            </div>
+            {HDFC_DOCS.map(function(d){return(<div key={d} style={{display:'flex',alignItems:'center',gap:8,fontSize:12.5,padding:'4px 0',color:docs[d]?'var(--green)':'var(--gray)'}}>
+              <span>{docs[d]?'✅':'⭕'}</span><span>{d}</span>
+            </div>);})}
+          </div>
+        </div>
+      </div>
+    </div>);
+  }
+  function AccountRow(props){const a=props.a;return(<div className="card" style={{marginBottom:8,cursor:'pointer',borderLeft:'3px solid '+(a.status==='submitted'?'var(--green)':a.status==='ca_working'?'var(--amber)':'var(--blue)')}} onClick={function(){openAcc(a);}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <div><div style={{fontWeight:700}}>{a.customer_name}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>{a.segment||'Stock Audit'} · {a.rm_email||'No RM'}</div></div>
+      <div style={{textAlign:'right',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>{hdfcStatusBadge(a.status)}{dueBadge(a.due_date)}</div>
+    </div>
+  </div>);}
+  return(<div className="page">
+    <h2 style={{fontWeight:800,marginBottom:4}}>My Assignments</h2>
+    <div style={{color:'var(--gray)',fontSize:13,marginBottom:20}}>HDFC Bank — {accounts.length} accounts assigned.</div>
+    {accounts.length===0?<div className="card" style={{textAlign:'center',color:'var(--gray)',padding:40}}>No assignments yet.</div>:<>
+      {pending.length>0&&<><h3 style={{fontWeight:700,fontSize:13,marginBottom:8,color:'var(--gray)'}}>AWAITING ACTION ({pending.length})</h3>{pending.map(function(a){return<AccountRow key={a.id} a={a}/>;})}</>}
+      {active.length>0&&<><h3 style={{fontWeight:700,fontSize:13,margin:'16px 0 8px',color:'var(--blue)'}}>IN PROGRESS ({active.length})</h3>{active.map(function(a){return<AccountRow key={a.id} a={a}/>;})}</>}
+      {done.length>0&&<><h3 style={{fontWeight:700,fontSize:13,margin:'16px 0 8px',color:'var(--green)'}}>COMPLETED ({done.length})</h3>{done.map(function(a){return<AccountRow key={a.id} a={a}/>;})}</>}
+    </>}
+  </div>);
+}
+
+// ── HDFC RM DASHBOARD ─────────────────────────────────────────────────────────
+function HDFCRMDashboard(){
+  const[accounts,setAccounts]=useState([]);
+  const[editing,setEditing]=useState(null);
+  const[form,setForm]=useState({customer_email:'',customer_phone:'',customer_name:''});
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState('');
+  useEffect(function(){refresh();},[]);
+  function refresh(){API.get('/api/hdfc/accounts').then(function(d){if(Array.isArray(d))setAccounts(d);});}
+  function startEdit(a){setEditing(a.id);setForm({customer_email:a.customer_email||'',customer_phone:a.customer_phone||'',customer_name:a.customer_name||''});setMsg('');}
+  async function saveContact(){
+    setSaving(true);setMsg('');
+    const r=await API.put('/api/hdfc/accounts/'+editing,{customer_email:form.customer_email,customer_phone:form.customer_phone,customer_name:form.customer_name,status:'rm_confirmed'});
+    setSaving(false);
+    if(r.ok){setMsg('Contact saved! Borrower notified.');setEditing(null);refresh();}
+    else setMsg(r.error||'Error');
+  }
+  return(<div className="page">
+    <h2 style={{fontWeight:800,marginBottom:4}}>My Accounts</h2>
+    <div style={{color:'var(--gray)',fontSize:13,marginBottom:20}}>Enter borrower contact details to enable CA to proceed.</div>
+    {accounts.length===0?<div className="card" style={{textAlign:'center',color:'var(--gray)',padding:40}}>No accounts assigned to you.</div>:accounts.map(function(a){
+      const isEd=editing===a.id;
+      return(<div key={a.id} className="card" style={{marginBottom:10}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'start',marginBottom:isEd?12:0}}>
+          <div><div style={{fontWeight:700,fontSize:15}}>{a.customer_name}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:2}}>{a.segment||'—'} · CA: {a.ca_email}</div></div>
+          <div style={{textAlign:'right',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>{hdfcStatusBadge(a.status)}{dueBadge(a.due_date)}</div>
+        </div>
+        {!isEd&&<div style={{display:'flex',alignItems:'center',gap:12,marginTop:8}}>
+          <span style={{fontSize:13,color:a.customer_email?'inherit':'var(--amber)'}}>{a.customer_email?('📧 '+a.customer_email):'⚠ Contact not entered'}</span>
+          {a.customer_phone&&<span style={{fontSize:13}}>📞 {a.customer_phone}</span>}
+          <button className="btn btn-p btn-sm" style={{marginLeft:'auto'}} onClick={function(){startEdit(a);}}>✏️ {a.customer_email?'Edit':'Enter'} Contact</button>
+        </div>}
+        {isEd&&<div>
+          <div className="fg2" style={{marginBottom:8}}>
+            <div className="fg"><label>Borrower Email</label><input type="email" value={form.customer_email} onChange={function(e){setForm(function(p){return{...p,customer_email:e.target.value};});}} placeholder="borrower@company.com"/></div>
+            <div className="fg"><label>Borrower Phone</label><input value={form.customer_phone} onChange={function(e){setForm(function(p){return{...p,customer_phone:e.target.value};});}} placeholder="+91 9XXXXXXXXX"/></div>
+          </div>
+          <div className="fg" style={{marginBottom:10}}><label>Customer Name (confirm)</label><input value={form.customer_name} onChange={function(e){setForm(function(p){return{...p,customer_name:e.target.value};});}}/></div>
+          {msg&&<div style={{fontSize:12,color:msg.includes('!')?'var(--green)':'var(--red)',marginBottom:8}}>{msg}</div>}
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-p btn-sm" onClick={saveContact} disabled={saving||!form.customer_email}>{saving?'Saving…':'Save Contact'}</button>
+            <button className="btn btn-o btn-sm" onClick={function(){setEditing(null);setMsg('');}}>Cancel</button>
+          </div>
+        </div>}
+      </div>);
+    })}
+  </div>);
+}
+
+// ── HDFC SUPERVISOR DASHBOARD ─────────────────────────────────────────────────
+function HDFCSupervisorDashboard(){
+  const[accounts,setAccounts]=useState([]);
+  const[filter,setFilter]=useState('all');
+  useEffect(function(){API.get('/api/hdfc/accounts').then(function(d){if(Array.isArray(d))setAccounts(d);});},[]);
+  const statusOptions=[['all','All'],['pending','Pending'],['rm_confirmed','RM Confirmed'],['doc_requested','Doc Requested'],['ca_working','CA Working'],['submitted','Submitted'],['approved','Approved']];
+  const filtered=filter==='all'?accounts:accounts.filter(function(a){return a.status===filter;});
+  const stats={total:accounts.length,pending:accounts.filter(function(a){return a.status==='pending';}).length,overdue:accounts.filter(function(a){return dueDays(a.due_date)<0;}).length,submitted:accounts.filter(function(a){return a.status==='submitted'||a.status==='approved';}).length};
+  return(<div className="page">
+    <h2 style={{fontWeight:800,marginBottom:4}}>Portfolio Overview</h2>
+    <div style={{color:'var(--gray)',fontSize:13,marginBottom:16}}>Supervisor view — read only.</div>
+    <div className="sg" style={{marginBottom:20}}>
+      {[['Total',stats.total,'var(--blue)'],['Pending',stats.pending,'var(--amber)'],['Overdue',stats.overdue,'var(--red)'],['Completed',stats.submitted,'var(--green)']].map(function(s){return(<div key={s[0]} className="card" style={{textAlign:'center'}}><div style={{fontSize:26,fontWeight:800,color:s[2]}}>{s[1]}</div><div style={{fontSize:12,color:'var(--gray)',marginTop:4}}>{s[0]}</div></div>);})}
+    </div>
+    <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+      {statusOptions.map(function(o){return(<button key={o[0]} className={'btn btn-sm '+(filter===o[0]?'btn-p':'btn-o')} onClick={function(){setFilter(o[0]);}}>{o[1]}</button>);})}
+    </div>
+    <div style={{overflowX:'auto'}}>
+      <table style={{width:'100%',borderCollapse:'collapse',background:'#fff',borderRadius:10,overflow:'hidden',boxShadow:'var(--sh)'}}>
+        <thead><tr style={{background:'#f8fafc'}}>{['Customer','Segment','CA','RM','Due Date','Status'].map(function(h){return(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:700,color:'var(--gray)',textTransform:'uppercase'}}>{h}</th>);})}</tr></thead>
+        <tbody>{filtered.map(function(a,i){return(<tr key={a.id} style={{borderTop:'1px solid #f1f5f9',background:i%2?'#fafafa':'#fff'}}>
+          <td style={{padding:'10px 14px',fontWeight:600}}>{a.customer_name}</td>
+          <td style={{padding:'10px 14px',color:'var(--gray)',fontSize:13}}>{a.segment||'—'}</td>
+          <td style={{padding:'10px 14px',fontSize:12}}>{a.ca_email}</td>
+          <td style={{padding:'10px 14px',fontSize:12}}>{a.rm_email||'—'}</td>
+          <td style={{padding:'10px 14px'}}>{dueBadge(a.due_date)}</td>
+          <td style={{padding:'10px 14px'}}>{hdfcStatusBadge(a.status)}</td>
+        </tr>);})}</tbody>
+      </table>
+      {filtered.length===0&&<div style={{textAlign:'center',padding:30,color:'var(--gray)'}}>No accounts in this filter.</div>}
+    </div>
+  </div>);
+}
+
+// ── HDFC CM DASHBOARD ─────────────────────────────────────────────────────────
+function HDFCCMDashboard(){
+  const{user}=useContext(AuthCtx);
+  const[accounts,setAccounts]=useState([]);
+  const[filter,setFilter]=useState('all');
+  const[showImport,setShowImport]=useState(false);
+  const[showManual,setShowManual]=useState(false);
+  const[importing,setImporting]=useState(false);
+  const[importResult,setImportResult]=useState(null);
+  const[manualForm,setManualForm]=useState({customer_name:'',rm_email:'',ca_email:'',due_date:'',segment:'',supervisor_email:'',customer_email:''});
+  const[manualSaving,setManualSaving]=useState(false);
+  const[manualMsg,setManualMsg]=useState('');
+  const[approving,setApproving]=useState('');
+  useEffect(function(){refresh();},[]);
+  function refresh(){API.get('/api/hdfc/accounts').then(function(d){if(Array.isArray(d))setAccounts(d);});}
+  function setMF(k,v){setManualForm(function(p){return{...p,[k]:v};});}
+  async function addManual(){
+    setManualSaving(true);setManualMsg('');
+    const r=await API.post('/api/hdfc/manual-account',manualForm);
+    setManualSaving(false);
+    if(r.ok){setManualMsg('Account added!');refresh();setManualForm({customer_name:'',rm_email:'',ca_email:'',due_date:'',segment:'',supervisor_email:'',customer_email:''});}
+    else setManualMsg(r.error||'Error');
+  }
+  async function approveAccount(id){
+    setApproving(id);
+    await API.put('/api/hdfc/accounts/'+id,{status:'approved'});
+    setApproving('');refresh();
+  }
+  function handleExcel(e){
+    const file=e.target.files[0];if(!file)return;
+    setImporting(true);setImportResult(null);
+    const reader=new FileReader();
+    reader.onload=async function(ev){
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'binary'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        if(!rows.length){setImportResult({error:'No data found in Excel'});setImporting(false);return;}
+        const accounts=rows.map(function(row){
+          // Try to find columns by common names
+          function col(){for(var i=0;i<arguments.length;i++){var k=arguments[i];if(row[k]!==undefined&&row[k]!=='')return String(row[k]);}return'';}
+          return{
+            customer_name:col('Customer Name','customer_name','Name','CUSTOMER NAME'),
+            rm_email:col('RM Email','rm_email','RM','Relationship Manager Email'),
+            ca_email:col('CA Email','ca_email','Auditor Email','CA'),
+            due_date:col('Due Date','due_date','Audit Due Date','DUE DATE'),
+            segment:col('Segment','segment','SEGMENT','Type'),
+            supervisor_email:col('Supervisor Email','supervisor_email','Supervisor'),
+            customer_email:col('Borrower Email','customer_email','Borrower'),
+          };
+        }).filter(function(a){return a.customer_name&&a.ca_email&&a.due_date;});
+        if(!accounts.length){setImportResult({error:'No valid rows found. Ensure columns: Customer Name, CA Email, Due Date'});setImporting(false);return;}
+        const r=await API.post('/api/hdfc/bulk-import',{accounts});
+        setImportResult({ok:true,count:accounts.length,details:r.results});
+        refresh();
+      }catch(err){setImportResult({error:'Parse error: '+err.message});}
+      setImporting(false);
+    };
+    reader.readAsBinaryString(file);
+  }
+  const statusOptions=[['all','All'],['pending','Pending'],['rm_confirmed','RM Confirmed'],['doc_requested','Docs Requested'],['ca_working','CA Working'],['submitted','Submitted'],['approved','Approved']];
+  const filtered=filter==='all'?accounts:accounts.filter(function(a){return a.status===filter;});
+  const stats={total:accounts.length,pending:accounts.filter(function(a){return a.status==='pending'||a.status==='rm_confirmed';}).length,overdue:accounts.filter(function(a){return dueDays(a.due_date)<0;}).length,submitted:accounts.filter(function(a){return a.status==='submitted';}).length,approved:accounts.filter(function(a){return a.status==='approved';}).length};
+  return(<div className="page">
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+      <div><h2 style={{fontWeight:800,fontSize:20}}>Portfolio Command Centre</h2><div style={{color:'var(--gray)',fontSize:13}}>HDFC Bank · Credit Manager — {user.name}</div></div>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-o btn-sm" onClick={function(){setShowManual(true);}}>➕ Manual Entry</button>
+        <button className="btn btn-p btn-sm" onClick={function(){setShowImport(true);}}>📊 Import Excel</button>
+      </div>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:14,marginBottom:20}}>
+      {[['Total Accounts',stats.total,'#3b82f6'],['Action Pending',stats.pending,'#d97706'],['Overdue',stats.overdue,'#dc2626'],['Submitted',stats.submitted,'#7c3aed'],['Approved',stats.approved,'#16a34a']].map(function(s){return(<div key={s[0]} className="card" style={{textAlign:'center',borderTop:'3px solid '+s[2]}}><div style={{fontSize:26,fontWeight:800,color:s[2]}}>{s[1]}</div><div style={{fontSize:11,color:'var(--gray)',marginTop:4,textTransform:'uppercase',fontWeight:600}}>{s[0]}</div></div>);})}
+    </div>
+    <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+      {statusOptions.map(function(o){return(<button key={o[0]} className={'btn btn-sm '+(filter===o[0]?'btn-p':'btn-o')} onClick={function(){setFilter(o[0]);}}>{o[1]}</button>);})}
+    </div>
+    <div style={{overflowX:'auto'}}>
+      <table style={{width:'100%',borderCollapse:'collapse',background:'#fff',borderRadius:10,overflow:'hidden',boxShadow:'var(--sh)'}}>
+        <thead><tr style={{background:'#f8fafc'}}>{['Customer','Segment','RM','CA','Due Date','Borrower Contact','Status','Action'].map(function(h){return(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:700,color:'var(--gray)',textTransform:'uppercase',whiteSpace:'nowrap'}}>{h}</th>);})}</tr></thead>
+        <tbody>{filtered.map(function(a,i){return(<tr key={a.id} style={{borderTop:'1px solid #f1f5f9',background:i%2?'#fafafa':'#fff'}}>
+          <td style={{padding:'10px 14px',fontWeight:700}}>{a.customer_name}</td>
+          <td style={{padding:'10px 14px',color:'var(--gray)',fontSize:12}}>{a.segment||'—'}</td>
+          <td style={{padding:'10px 14px',fontSize:12}}>{a.rm_email||'—'}</td>
+          <td style={{padding:'10px 14px',fontSize:12}}>{a.ca_email}</td>
+          <td style={{padding:'10px 14px',whiteSpace:'nowrap'}}>{dueBadge(a.due_date)}</td>
+          <td style={{padding:'10px 14px',fontSize:12}}>{a.customer_email?<span style={{color:'var(--green)'}}>✅ {a.customer_email}</span>:<span style={{color:'var(--amber)'}}>⚠ Pending</span>}</td>
+          <td style={{padding:'10px 14px'}}>{hdfcStatusBadge(a.status)}</td>
+          <td style={{padding:'10px 14px'}}>{a.status==='submitted'&&<button className="btn btn-sm" style={{background:'var(--green)',color:'#fff',whiteSpace:'nowrap'}} onClick={function(){approveAccount(a.id);}} disabled={approving===a.id}>{approving===a.id?'…':'✅ Approve'}</button>}</td>
+        </tr>);})}</tbody>
+      </table>
+      {filtered.length===0&&<div style={{textAlign:'center',padding:30,color:'var(--gray)'}}>No accounts. Click "Import Excel" or "Manual Entry" to add.</div>}
+    </div>
+    {showImport&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div className="card" style={{width:520,maxWidth:'95vw',maxHeight:'80vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <h3 style={{fontWeight:800,fontSize:16}}>Import Accounts via Excel</h3>
+          <button className="btn btn-o btn-sm" onClick={function(){setShowImport(false);setImportResult(null);}}>✕</button>
+        </div>
+        <div style={{background:'#f0f9ff',border:'1.5px solid #bae6fd',borderRadius:8,padding:'12px 14px',marginBottom:14,fontSize:12.5,color:'#0c4a6e'}}>
+          <strong>Required columns:</strong> Customer Name, CA Email, Due Date<br/>
+          <strong>Optional:</strong> RM Email, Segment, Supervisor Email, Borrower Email<br/>
+          Column names are flexible — the system will match common variants.
+        </div>
+        <input type="file" accept=".xlsx,.xls,.csv" onChange={handleExcel} style={{marginBottom:14}}/>
+        {importing&&<div style={{color:'var(--blue)',fontSize:13}}>⏳ Processing Excel…</div>}
+        {importResult&&importResult.error&&<div style={{color:'var(--red)',fontSize:13}}>❌ {importResult.error}</div>}
+        {importResult&&importResult.ok&&<div style={{color:'var(--green)',fontSize:13}}>✅ Imported {importResult.count} accounts. CA login emails sent for new users.</div>}
+      </div>
+    </div>}
+    {showManual&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div className="card" style={{width:540,maxWidth:'95vw',maxHeight:'88vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <h3 style={{fontWeight:800,fontSize:16}}>Add Account Manually</h3>
+          <button className="btn btn-o btn-sm" onClick={function(){setShowManual(false);setManualMsg('');}}>✕</button>
+        </div>
+        <div className="fg2">
+          <div className="fg"><label>Customer Name *</label><input value={manualForm.customer_name} onChange={function(e){setMF('customer_name',e.target.value);}} placeholder="ABC Traders Pvt Ltd"/></div>
+          <div className="fg"><label>Segment</label><input value={manualForm.segment} onChange={function(e){setMF('segment',e.target.value);}} placeholder="SME / Large Corp / Mid Market"/></div>
+        </div>
+        <div className="fg2">
+          <div className="fg"><label>RM Email</label><input type="email" value={manualForm.rm_email} onChange={function(e){setMF('rm_email',e.target.value);}} placeholder="rm@hdfcbank.com"/></div>
+          <div className="fg"><label>CA Email *</label><input type="email" value={manualForm.ca_email} onChange={function(e){setMF('ca_email',e.target.value);}} placeholder="ca@firm.com"/></div>
+        </div>
+        <div className="fg2">
+          <div className="fg"><label>Due Date *</label><input type="date" value={manualForm.due_date} onChange={function(e){setMF('due_date',e.target.value);}}/></div>
+          <div className="fg"><label>Supervisor Email</label><input type="email" value={manualForm.supervisor_email} onChange={function(e){setMF('supervisor_email',e.target.value);}} placeholder="supervisor@hdfcbank.com"/></div>
+        </div>
+        <div className="fg"><label>Borrower Email (if known)</label><input type="email" value={manualForm.customer_email} onChange={function(e){setMF('customer_email',e.target.value);}} placeholder="borrower@company.com"/></div>
+        {manualMsg&&<div style={{fontSize:13,color:manualMsg.includes('!')?'var(--green)':'var(--red)',marginBottom:8}}>{manualMsg}</div>}
+        <div style={{display:'flex',gap:8,marginTop:8}}>
+          <button className="btn btn-p" onClick={addManual} disabled={manualSaving||!manualForm.customer_name||!manualForm.ca_email||!manualForm.due_date}>{manualSaving?'Adding…':'Add Account'}</button>
+          <button className="btn btn-o" onClick={function(){setShowManual(false);setManualMsg('');}}>Cancel</button>
+        </div>
+      </div>
+    </div>}
+  </div>);
+}
+
+// ── HDFC APP SHELL ────────────────────────────────────────────────────────────
+function HDFCApp(props){
+  const logout=props.logout;
+  const{user}=useContext(AuthCtx);
+  const role=user.hdfc_role;
+  const navItems=(function(){
+    if(role==='cm')return [{key:'dashboard',icon:'🏠',label:'Portfolio'}];
+    if(role==='supervisor')return [{key:'dashboard',icon:'📊',label:'Overview'}];
+    if(role==='rm')return [{key:'dashboard',icon:'👥',label:'My Accounts'}];
+    if(role==='ca')return [{key:'dashboard',icon:'📋',label:'Assignments'}];
+    return [{key:'dashboard',icon:'📁',label:'My Audits'}];
+  })();
+  const roleLabel=(function(){
+    if(role==='cm')return 'Credit Manager';
+    if(role==='supervisor')return 'Supervisor';
+    if(role==='rm')return 'Relationship Manager';
+    if(role==='ca')return 'Chartered Accountant';
+    return 'Borrower';
+  })();
+  return(<div className="app">
+    <div className="sidebar" style={{background:'#003366'}}>
+      <div className="logo" style={{borderBottom:'1px solid #004d99'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+          <div style={{background:'#fff',color:'#003366',fontWeight:900,fontSize:13,padding:'2px 7px',borderRadius:4,letterSpacing:1}}>HDFC</div>
+          <div style={{color:'#fff',fontWeight:800,fontSize:14}}>Bank</div>
+        </div>
+        <div style={{fontSize:10.5,color:'#90b8d8'}}>Stock Audit Portal</div>
+      </div>
+      <nav className="nav">{navItems.map(function(n){return(<div key={n.key} className="ni active" style={{borderLeftColor:'#fff'}}><span className="ni-icon">{n.icon}</span>{n.label}</div>);})}</nav>
+      <div className="sf" style={{borderTop:'1px solid #004d99'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div className="av" style={{background:'#1a6abf'}}>{initials(user.name)}</div>
+          <div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#90b8d8',fontSize:10.5}}>{roleLabel}</div></div>
+        </div>
+        <button className="btn btn-sm" style={{width:'100%',marginTop:10,background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.2)'}} onClick={logout}>Logout</button>
+      </div>
+    </div>
+    <div className="main">
+      <div className="topbar" style={{borderBottom:'3px solid #004C8F'}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <div style={{background:'#004C8F',color:'#fff',fontWeight:900,fontSize:13,padding:'2px 8px',borderRadius:4}}>HDFC</div>
+          <div style={{fontWeight:700,color:'#003366'}}>Stock Audit Portal</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:12,color:'var(--gray)'}}>{user.email}</span></div>
+      </div>
+      {role==='cm'&&<HDFCCMDashboard/>}
+      {role==='supervisor'&&<HDFCSupervisorDashboard/>}
+      {role==='rm'&&<HDFCRMDashboard/>}
+      {role==='ca'&&<HDFCCADashboard/>}
+      {role==='borrower'&&<HDFCBorrowerPortal/>}
+      {!role&&<div className="page"><div className="card" style={{textAlign:'center',padding:40,color:'var(--gray)'}}>Your HDFC role is not configured. Please contact your Credit Manager.</div></div>}
+    </div>
+  </div>);
+}
+
 // ── APP SHELL ─────────────────────────────────────────────────────────────────
 function App(){
   const[user,setUser]=useState(null);
@@ -1213,6 +1675,7 @@ function App(){
   function logout(){localStorage.removeItem('af_token');setUser(null);setPage('dashboard');}
   if(loading)return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f0f4f8',color:'var(--gray)',fontSize:15}}>⚡ Loading AuditFlow…</div>;
   if(!user)return<AuthCtx.Provider value={{user,setUser}}><AuthScreen onLogin={setUser}/></AuthCtx.Provider>;
+  if(user.org_code==='hdfc')return<AuthCtx.Provider value={{user,setUser}}><HDFCApp logout={logout}/></AuthCtx.Provider>;
   const isCA=user.role==='ca',isBanker=user.role==='banker',isBorrower=user.role==='borrower';
   const nav=isCA?[{key:'dashboard',icon:'🏠',label:'Dashboard'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'invoices',icon:'🧾',label:'Invoices'},{key:'ca-profile',icon:'🌟',label:'My Public Profile'},{key:'profile',icon:'👤',label:'Settings'},{key:'invite',icon:'📨',label:'Invite Someone'}]:isBanker?[{key:'dashboard',icon:'🏠',label:'Portfolio'},{key:'initiate',icon:'➕',label:'Initiate Audit'},{key:'profile',icon:'👤',label:'Profile'},{key:'invite',icon:'📨',label:'Invite Someone'}]:[{key:'dashboard',icon:'🏠',label:'My Audits'},{key:'profile',icon:'👤',label:'Profile'},{key:'invite',icon:'📨',label:'Invite Someone'}];
   if(initiating)return<AuthCtx.Provider value={{user,setUser}}><div className="app"><div className="sidebar"><div className="logo"><div className="logo-t">⚡ AuditFlow</div><div className="logo-s">Stock Audit Platform</div></div><nav className="nav">{nav.map(n=><div key={n.key} className="ni" onClick={()=>{setInitiating(false);setPage(n.key);}}><span className="ni-icon">{n.icon}</span>{n.label}</div>)}</nav><div className="sf"><div style={{display:'flex',alignItems:'center',gap:8}}><div className="av">{initials(user.name)}</div><div><div style={{color:'#fff',fontWeight:600,fontSize:12.5}}>{user.name}</div><div style={{color:'#94a3b8',fontSize:11}}>{user.role.toUpperCase()}</div></div></div></div></div><div className="main"><div className="topbar"><div style={{fontWeight:700,color:'#374151'}}>Initiate Audit</div><button className="btn btn-o btn-sm" onClick={logout}>Logout</button></div><InitiateAudit onDone={(id)=>{setInitiating(false);setPage('dashboard');if(id)setPanel(id);}}/></div></div></AuthCtx.Provider>;

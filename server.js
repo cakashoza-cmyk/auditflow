@@ -26,7 +26,8 @@ if (!fs.existsSync(UPLOADS)) fs.mkdirSync(UPLOADS);
 const EMPTY_DB = {
   users: [], audits: [], documents: [], timeline: [],
   reports: [], invoices: [], aa_consents: [], notifications: [],
-  _seq: { users:0, documents:0, timeline:0, reports:0, aa_consents:0, notifications:0 }
+  hdfc_accounts: [],
+  _seq: { users:0, documents:0, timeline:0, reports:0, aa_consents:0, notifications:0, hdfc_accounts:0 }
 };
 
 function loadDB() {
@@ -44,6 +45,7 @@ function withDB(fn) {
 }
 function dbInsert(table, data) {
   return withDB(db => {
+    if (!db[table]) db[table] = [];
     if (!db._seq) db._seq = {};
     if (!db._seq[table]) db._seq[table] = db[table].length;
     db._seq[table]++;
@@ -202,7 +204,8 @@ function linkPendingAudits(userId, email, role) {
 // ── AUTH ROUTES ──────────────────────────────────────────────────────────
 app.post('/api/auth/register', async function(req, res) {
   const { name, email, password, role, phone, city, address, icai_no, firm_name,
-          firm_reg_no, bank_name, branch, gstin, pan, constitution, referred_by } = req.body;
+          firm_reg_no, bank_name, branch, gstin, pan, constitution, referred_by,
+          org, hdfc_role } = req.body;
   if (!name || !email || !password || !role)
     return res.status(400).json({ error: 'Name, email, password and role required' });
   if (dbFindOne('users', { email }))
@@ -215,6 +218,7 @@ app.post('/api/auth/register', async function(req, res) {
     gstin:gstin||null, pan:pan||null, constitution:constitution||null,
     is_temp_password: false,
     referred_by: referred_by || null,
+    org_code: org || null, hdfc_role: hdfc_role || null,
     free_months: 12 // all new registrations get 12 months free (Founding Member offer)
   });
   // Credit referrer with 2 extra free months
@@ -233,7 +237,7 @@ app.post('/api/auth/register', async function(req, res) {
     }
   }
   const linked = linkPendingAudits(user.id, email, role);
-  const token = jwt.sign({ id:user.id, name:user.name, email:user.email, role:user.role }, JWT_SECRET, { expiresIn:'7d' });
+  const token = jwt.sign({ id:user.id, name:user.name, email:user.email, role:user.role, org_code:user.org_code||null, hdfc_role:user.hdfc_role||null }, JWT_SECRET, { expiresIn:'7d' });
   res.json({ token, user:safeUser(user), linked_audits:linked });
 });
 
@@ -243,7 +247,7 @@ app.post('/api/auth/login', async function(req, res) {
   if (!user || !await bcrypt.compare(password, user.password))
     return res.status(400).json({ error: 'Invalid credentials' });
   linkPendingAudits(user.id, email, user.role);
-  const token = jwt.sign({ id:user.id, name:user.name, email:user.email, role:user.role }, JWT_SECRET, { expiresIn:'7d' });
+  const token = jwt.sign({ id:user.id, name:user.name, email:user.email, role:user.role, org_code:user.org_code||null, hdfc_role:user.hdfc_role||null }, JWT_SECRET, { expiresIn:'7d' });
   res.json({ token, user:safeUser(user) });
 });
 
@@ -1045,6 +1049,162 @@ async function seedDemo() {
     }
   }
 }
+
+// ── HDFC ──────────────────────────────────────────────────────────────────────
+function genTempPassword() { return 'HDFC@' + Math.floor(100000 + Math.random() * 900000); }
+
+// Ensure or create a user, return { user, isNew, tempPassword }
+async function ensureHdfcUser(email, name, hdfcRole, extraFields) {
+  let user = dbFindOne('users', { email });
+  if (user) return { user, isNew: false, tempPassword: null };
+  const tempPassword = genTempPassword();
+  const hash = await bcrypt.hash(tempPassword, 10);
+  const newUser = { id: 'U-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
+    name: name || email.split('@')[0], email, password: hash,
+    role: hdfcRole === 'borrower' ? 'borrower' : (hdfcRole === 'ca' ? 'ca' : 'banker'),
+    org_code: 'hdfc', hdfc_role: hdfcRole, is_temp_password: true, ...extraFields,
+    created_at: new Date().toISOString() };
+  dbInsert('users', newUser);
+  return { user: newUser, isNew: true, tempPassword };
+}
+
+app.post('/api/hdfc/bulk-import', auth(), async function(req, res) {
+  const caller = dbFindOne('users', { id: req.user.id });
+  if (!caller || caller.org_code !== 'hdfc' || caller.hdfc_role !== 'cm')
+    return res.status(403).json({ error: 'Only HDFC CM can import accounts' });
+  const { accounts } = req.body;
+  if (!Array.isArray(accounts) || !accounts.length)
+    return res.status(400).json({ error: 'No accounts provided' });
+  const results = [];
+  for (const acc of accounts) {
+    const { customer_name, rm_email, ca_email, due_date, segment, supervisor_email, customer_email } = acc;
+    if (!customer_name || !ca_email || !due_date) { results.push({ error: 'Missing required fields', acc }); continue; }
+    // Ensure CA user
+    const caResult = await ensureHdfcUser(ca_email, null, 'ca', {});
+    // Ensure RM user
+    let rmResult = null;
+    if (rm_email) rmResult = await ensureHdfcUser(rm_email, null, 'rm', {});
+    // Create account record
+    const accountId = 'HDFC-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+    const accountRec = { id: accountId, org_code: 'hdfc', cm_id: caller.id, cm_email: caller.email,
+      customer_name, customer_email: customer_email || '', rm_email: rm_email || '',
+      ca_email, supervisor_email: supervisor_email || caller.supervisor_email || '',
+      due_date, segment: segment || '', status: 'pending',
+      borrower_contact_entered: false, doc_request_sent: false,
+      created_at: new Date().toISOString() };
+    dbInsert('hdfc_accounts', accountRec);
+    // Send email to CA if new
+    if (caResult.isNew) {
+      await sendEmail({ to: ca_email, subject: 'HDFC Bank Stock Audit Assignment — AuditFlow',
+        html: '<p>Dear Auditor,</p><p>You have been assigned a stock audit by HDFC Bank. Please login to AuditFlow to view your assignments.</p><p><strong>Login URL:</strong> <a href="' + (process.env.APP_URL||'https://www.auditflw.in') + '">' + (process.env.APP_URL||'https://www.auditflw.in') + '</a></p><p><strong>Email:</strong> ' + ca_email + '<br><strong>Temporary Password:</strong> ' + caResult.tempPassword + '</p><p>Select <strong>HDFC Bank</strong> from the Organisation dropdown on the login page.</p><p>Regards,<br>HDFC Bank — AuditFlow</p>' });
+    }
+    results.push({ accountId, customer_name, ca_email, caIsNew: caResult.isNew, rm_email, rmIsNew: rmResult ? rmResult.isNew : false });
+  }
+  res.json({ ok: true, results });
+});
+
+app.get('/api/hdfc/accounts', auth(), function(req, res) {
+  const user = dbFindOne('users', { id: req.user.id });
+  if (!user || user.org_code !== 'hdfc') return res.status(403).json({ error: 'HDFC only' });
+  let accounts = dbFind('hdfc_accounts', {});
+  if (user.hdfc_role === 'cm') accounts = accounts.filter(a => a.cm_email === user.email || a.cm_id === user.id);
+  else if (user.hdfc_role === 'supervisor') accounts = accounts.filter(a => a.supervisor_email === user.email);
+  else if (user.hdfc_role === 'rm') accounts = accounts.filter(a => a.rm_email === user.email);
+  else if (user.hdfc_role === 'ca') accounts = accounts.filter(a => a.ca_email === user.email);
+  else if (user.hdfc_role === 'borrower') accounts = accounts.filter(a => a.customer_email === user.email);
+  res.json(accounts);
+});
+
+app.put('/api/hdfc/accounts/:id', auth(), async function(req, res) {
+  const user = dbFindOne('users', { id: req.user.id });
+  if (!user || user.org_code !== 'hdfc') return res.status(403).json({ error: 'HDFC only' });
+  const account = dbFindOne('hdfc_accounts', { id: req.params.id });
+  if (!account) return res.status(404).json({ error: 'Account not found' });
+  const updates = {};
+  const { customer_email, customer_phone, customer_name, status, borrower_docs, visit_date, ca_notes, udin, drive_link, doc_request_sent } = req.body;
+  if (user.hdfc_role === 'rm' || user.hdfc_role === 'cm') {
+    if (customer_email !== undefined) { updates.customer_email = customer_email;
+      if (customer_email && customer_email !== account.customer_email) {
+        // Auto-register borrower
+        ensureHdfcUser(customer_email, account.customer_name, 'borrower', {}).then(async function(br) {
+          if (br.isNew) await sendEmail({ to: customer_email, subject: 'HDFC Bank Stock Audit — Document Portal',
+            html: '<p>Dear ' + account.customer_name + ',</p><p>Your bank has initiated a stock audit. Please login to submit your documents.</p><p><strong>Login URL:</strong> <a href="' + (process.env.APP_URL||'https://www.auditflw.in') + '">' + (process.env.APP_URL||'https://www.auditflw.in') + '</a></p><p><strong>Email:</strong> ' + customer_email + '<br><strong>Temporary Password:</strong> ' + br.tempPassword + '</p><p>Select <strong>HDFC Bank</strong> from the Organisation dropdown.</p><p>Regards,<br>HDFC Bank</p>' });
+        });
+        updates.borrower_contact_entered = true; } }
+    if (customer_phone !== undefined) updates.customer_phone = customer_phone;
+    if (customer_name !== undefined) updates.customer_name = customer_name;
+  }
+  if (user.hdfc_role === 'ca' || user.hdfc_role === 'cm') {
+    if (status !== undefined) updates.status = status;
+    if (ca_notes !== undefined) updates.ca_notes = ca_notes;
+    if (udin !== undefined) updates.udin = udin;
+    if (drive_link !== undefined) updates.drive_link = drive_link;
+    if (doc_request_sent !== undefined) updates.doc_request_sent = doc_request_sent;
+    if (visit_date !== undefined) updates.visit_date = visit_date;
+  }
+  if (user.hdfc_role === 'borrower') {
+    if (borrower_docs !== undefined) updates.borrower_docs = borrower_docs;
+    if (visit_date !== undefined) updates.visit_date = visit_date;
+  }
+  if (user.hdfc_role === 'cm') {
+    if (status !== undefined) updates.status = status;
+    if (udin !== undefined) updates.udin = udin;
+  }
+  dbUpdate('hdfc_accounts', { id: req.params.id }, updates);
+  res.json({ ok: true, account: dbFindOne('hdfc_accounts', { id: req.params.id }) });
+});
+
+app.post('/api/hdfc/accounts/:id/send-doc-request', auth(), async function(req, res) {
+  const user = dbFindOne('users', { id: req.user.id });
+  if (!user || user.org_code !== 'hdfc' || user.hdfc_role !== 'ca')
+    return res.status(403).json({ error: 'CA only' });
+  const account = dbFindOne('hdfc_accounts', { id: req.params.id });
+  if (!account) return res.status(404).json({ error: 'Not found' });
+  if (!account.customer_email) return res.status(400).json({ error: 'Borrower email not entered yet (RM must enter first)' });
+  const { drive_link } = req.body;
+  if (drive_link) dbUpdate('hdfc_accounts', { id: req.params.id }, { drive_link });
+  const link = drive_link || account.drive_link || '';
+  await sendEmail({ to: account.customer_email, subject: 'HDFC Stock Audit — Document Submission Required',
+    html: '<p>Dear ' + account.customer_name + ',</p><p>Your auditor has requested stock audit documents. Please submit the following within 3 working days:</p><ul><li>Stock Statement (as of latest date)</li><li>Debtors List with aging</li><li>Insurance Policy copies</li><li>Latest IT Returns / Audited Financials</li><li>Sanction Letter copy</li></ul>' + (link ? '<p><strong>Upload to:</strong> <a href="' + link + '">' + link + '</a></p>' : '') + '<p>You can also login to the AuditFlow portal to tick off documents as submitted.</p><p>Regards,<br>' + user.name + '<br>Chartered Accountant</p>' });
+  dbUpdate('hdfc_accounts', { id: req.params.id }, { doc_request_sent: true, doc_request_date: new Date().toISOString() });
+  res.json({ ok: true });
+});
+
+app.post('/api/hdfc/manual-account', auth(), async function(req, res) {
+  const user = dbFindOne('users', { id: req.user.id });
+  if (!user || user.org_code !== 'hdfc' || user.hdfc_role !== 'cm')
+    return res.status(403).json({ error: 'Only HDFC CM can add accounts' });
+  const { customer_name, rm_email, ca_email, due_date, segment, supervisor_email, customer_email } = req.body;
+  if (!customer_name || !ca_email || !due_date) return res.status(400).json({ error: 'customer_name, ca_email, due_date required' });
+  const caResult = await ensureHdfcUser(ca_email, null, 'ca', {});
+  const accountId = 'HDFC-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+  const accountRec = { id: accountId, org_code: 'hdfc', cm_id: user.id, cm_email: user.email,
+    customer_name, customer_email: customer_email || '', rm_email: rm_email || '',
+    ca_email, supervisor_email: supervisor_email || user.supervisor_email || '',
+    due_date, segment: segment || '', status: 'pending',
+    borrower_contact_entered: false, doc_request_sent: false,
+    created_at: new Date().toISOString() };
+  dbInsert('hdfc_accounts', accountRec);
+  if (caResult.isNew) {
+    await sendEmail({ to: ca_email, subject: 'HDFC Bank Stock Audit Assignment — AuditFlow',
+      html: '<p>You have been assigned a stock audit by HDFC Bank.</p><p>Login: <a href="' + (process.env.APP_URL||'https://www.auditflw.in') + '">' + (process.env.APP_URL||'https://www.auditflw.in') + '</a><br>Email: ' + ca_email + '<br>Password: ' + caResult.tempPassword + '</p><p>Select HDFC Bank from Organisation dropdown.</p>' });
+  }
+  res.json({ ok: true, accountId, account: accountRec });
+});
+
+// CM profile update (supervisor_email, etc.)
+app.put('/api/hdfc/cm-profile', auth(), function(req, res) {
+  const user = dbFindOne('users', { id: req.user.id });
+  if (!user || user.org_code !== 'hdfc' || user.hdfc_role !== 'cm')
+    return res.status(403).json({ error: 'CM only' });
+  const { supervisor_email, branch, bank_name } = req.body;
+  const updates = {};
+  if (supervisor_email !== undefined) updates.supervisor_email = supervisor_email;
+  if (branch !== undefined) updates.branch = branch;
+  if (bank_name !== undefined) updates.bank_name = bank_name;
+  dbUpdate('users', { id: user.id }, updates);
+  res.json({ ok: true });
+});
 
 // ── START ─────────────────────────────────────────────────────────────────────
 seedDemo().then(() => {
