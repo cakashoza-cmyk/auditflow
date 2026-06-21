@@ -712,7 +712,7 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
       const base64Data = req.file.buffer.toString('base64');
       if (useKimi) {
         return JSON.stringify({
-          model: 'moonshot-v1-8k',
+          model: 'kimi-k2.6',
           messages: [{ role: 'user', content: [
             { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } },
             { type: 'text', text: promptText }
@@ -733,8 +733,7 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
     if (isPdf) { textContent = extractPdfText(req.file.buffer); }
     else if (isExcel) { textContent = extractExcelText(req.file.buffer); }
     else { textContent = req.file.buffer.toString('utf8', 0, 15000); }
-    const model = useKimi ? 'moonshot-v1-32k' : 'llama-3.3-70b-versatile';
-    const hostname = useKimi ? 'api.moonshot.cn' : 'api.groq.com';
+    const model = useKimi ? 'kimi-k2.6' : 'llama-3.3-70b-versatile';
     return JSON.stringify({
       model,
       messages: [
@@ -746,7 +745,7 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
   }
   let payload;
   try { payload = buildPayload(); } catch(e) { return res.status(500).json({ error: 'File processing error: ' + e.message }); }
-  const aiHostname = (useKimi || isImage) ? (useKimi ? 'api.moonshot.cn' : 'api.groq.com') : 'api.groq.com';
+  const aiHostname = useKimi ? 'api.moonshot.ai' : 'api.groq.com';
   const aiPath = useKimi ? '/v1/chat/completions' : '/openai/v1/chat/completions';
   const aiReq = https.request({
     hostname: aiHostname, path: aiPath, method: 'POST',
