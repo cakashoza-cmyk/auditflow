@@ -323,6 +323,26 @@ app.get('/api/notifications', auth(), function(req, res) {
   res.json(notifs);
 });
 
+// ── EMAIL TEST ───────────────────────────────────────────────────────────
+app.get('/api/admin/test-email', function(req, res) {
+  var key = req.query.key || '';
+  var adminKey = process.env.ADMIN_KEY || 'auditflow-admin-2024';
+  if (key !== adminKey) return res.status(403).json({ error: 'Forbidden' });
+  var to = req.query.to || 'cakashoza@gmail.com';
+  var apiKey = process.env.RESEND_API_KEY;
+  var senderEmail = process.env.SENDER_EMAIL || 'noreply@auditflw.in';
+  res.json({
+    resend_api_key_set: !!apiKey,
+    resend_api_key_prefix: apiKey ? apiKey.substring(0,8)+'...' : null,
+    sender_email: senderEmail,
+    app_url: process.env.APP_URL || 'not set',
+    sending_to: to
+  });
+  if (apiKey) {
+    sendEmail({ to, toName: 'Admin', subject: '[AuditFlow] Test Email', body: 'This is a test email from AuditFlow. If you received this, email is working!', type: 'test' });
+  }
+});
+
 // ── ADMIN STATS (protected by key) ───────────────────────────────────────
 app.get('/api/admin/stats', function(req, res) {
   var key = req.query.key || '';

@@ -319,6 +319,20 @@ function ReportForm({audit,onClose,onRefresh}){
     setData(p=>({...p,stocks:s}));
   }
 
+  function setInsurance(i,col,val){
+    const ins=[...(data.insurance_policies||[{}])];
+    ins[i]={...(ins[i]||{}),[col]:val};
+    setData(p=>({...p,insurance_policies:ins}));
+  }
+  function addInsurance(){
+    setData(p=>({...p,insurance_policies:[...(p.insurance_policies||[{}]),{}]}));
+  }
+  function removeInsurance(i){
+    const ins=[...(data.insurance_policies||[{}])];
+    ins.splice(i,1);
+    setData(p=>({...p,insurance_policies:ins.length?ins:[{}]}));
+  }
+
   function setDebt(i,col,val){
     const d=[...(data.debtors||Array(5).fill({}))];
     d[i]={...d[i],[col]:val};
@@ -349,10 +363,21 @@ function ReportForm({audit,onClose,onRefresh}){
     const dMargin=(parseFloat(data.debtor_margin_pct)||40)/100;
     const grossDP=Math.round(Math.max(0,(goodStock*(1-sMargin))+(eligDebtors*(1-dMargin))-creditors));
     const sanctioned=parseFloat(data.sanctioned_limit)||0;
-    const finalDP=sanctioned>0?Math.round(Math.min(grossDP,sanctioned)):grossDP;
+    const banking=data.banking_arrangement||'Single Bank';
+    const isConsortium=banking==='Consortium'||banking==='Multiple Banking';
+    const totalConsortiumLimit=parseFloat(data.total_consortium_limit)||0;
+    let finalDP;
+    let bankShare=1;
+    if(isConsortium&&totalConsortiumLimit>0&&sanctioned>0){
+      bankShare=sanctioned/totalConsortiumLimit;
+      const totalDP=Math.round(Math.min(grossDP,totalConsortiumLimit));
+      finalDP=Math.round(totalDP*bankShare);
+    } else {
+      finalDP=sanctioned>0?Math.round(Math.min(grossDP,sanctioned)):grossDP;
+    }
     const dpBank=parseFloat(data.dp_bank)||0;
     const outstanding=parseFloat(data.outstanding)||0;
-    return{goodStock,eligDebtors,grossDP,finalDP,sMargin,dMargin,dpBank,outstanding,sanctioned,diff:dpBank>0?Math.round(dpBank-finalDP):null};
+    return{goodStock,eligDebtors,grossDP,finalDP,sMargin,dMargin,dpBank,outstanding,sanctioned,isConsortium,totalConsortiumLimit,bankShare,diff:dpBank>0?Math.round(dpBank-finalDP):null};
   }
 
   const dpCalc=calcDP();
@@ -422,7 +447,8 @@ th{background:#e8e8e8;font-weight:bold}
     <div class="dp-item"><label>Eligible Stocks (after dead stock)</label><span>Rs.${dp.goodStock.toLocaleString('en-IN')}</span></div>
     <div class="dp-item"><label>Eligible Debtors (&lt;90 days)</label><span>Rs.${dp.eligDebtors.toLocaleString('en-IN')}</span></div>
     <div class="dp-item"><label>Gross DP (Stock@${Math.round(dp.sMargin*100)}%, Debtor@${Math.round(dp.dMargin*100)}% margin, less creditors)</label><span>Rs.${dp.grossDP.toLocaleString('en-IN')}</span></div>
-    <div class="dp-item"><label>Final DP (capped at sanctioned limit)</label><span style="color:${dp.finalDP<dp.outstanding?'#dc2626':'#16a34a'}">Rs.${dp.finalDP.toLocaleString('en-IN')}</span></div>
+    ${dp.isConsortium?'<div class="dp-item"><label>Total Consortium Limit</label><span>Rs.'+dp.totalConsortiumLimit.toLocaleString('en-IN')+'</span></div><div class="dp-item"><label>This Bank\'s Share</label><span>'+Math.round(dp.bankShare*100)+'% (Rs.'+dp.sanctioned.toLocaleString('en-IN')+')</span></div>':''}
+    <div class="dp-item"><label>${dp.isConsortium?'This Bank\'s DP ('+Math.round(dp.bankShare*100)+'% of pool)':'Final DP (capped at sanctioned limit)'}</label><span style="color:${dp.finalDP<dp.outstanding?'#dc2626':'#16a34a'}">Rs.${dp.finalDP.toLocaleString('en-IN')}</span></div>
   </div>
   ${dp.dpBank>0?`<div style="margin-top:6px;font-size:10px"><strong>DP Variance:</strong> Borrower declared Rs.${dp.dpBank.toLocaleString('en-IN')} | Audit computed Rs.${dp.finalDP.toLocaleString('en-IN')} | Difference: Rs.${Math.abs(dp.diff||0).toLocaleString('en-IN')} ${(dp.diff||0)>0?'(Borrower overstated)':'(Audit higher)'}</div>`:''}
   ${dp.finalDP<dp.outstanding?`<div class="alert-red" style="margin-top:6px">INADEQUATE DP: Outstanding Rs.${dp.outstanding.toLocaleString('en-IN')} exceeds Audit DP Rs.${dp.finalDP.toLocaleString('en-IN')}</div>`:''}
@@ -468,16 +494,19 @@ ${d.stock_observations?'<div class="field"><label>Storage & Quality Observations
 ${d.debtor_observations?'<div class="field"><label>Observations</label><p>'+d.debtor_observations+'</p></div>':''}
 
 <h2>Section 4 — Insurance</h2>
-<!-- creditors section removed per auditor request; total_creditors still used in DP calc -->
-<div class="grid3">
-  <div class="field"><label>Insurer</label><span>${d.insurer||'-'}</span></div>
-  <div class="field"><label>Policy No.</label><span>${d.policy_no||'-'}</span></div>
-  <div class="field"><label>Expiry Date</label><span>${d.policy_expiry||'-'}</span></div>
-  <div class="field"><label>Sum Insured</label><span>Rs.${(parseFloat(d.sum_insured)||0).toLocaleString('en-IN')}</span></div>
-  <div class="field"><label>Coverage Type</label><span>${d.coverage_type||'-'}</span></div>
-  <div class="field"><label>Bank as Mortgagee?</label><span>${d.bank_mortgagee||'-'}</span></div>
-</div>
-${parseFloat(d.sum_insured)>0&&parseFloat(d.outstanding)>0&&parseFloat(d.sum_insured)<parseFloat(d.outstanding)?'<div class="alert-red">Insurance Inadequate: Sum insured Rs.'+(parseFloat(d.sum_insured)||0).toLocaleString('en-IN')+' is less than outstanding Rs.'+(parseFloat(d.outstanding)||0).toLocaleString('en-IN')+'</div>':''}
+${(function(){
+  var pols=Array.isArray(d.insurance_policies)&&d.insurance_policies.length?d.insurance_policies:(d.insurer||d.policy_no?[{godown_unit:'',insurer:d.insurer,policy_no:d.policy_no,policy_expiry:d.policy_expiry,sum_insured:d.sum_insured,coverage_type:d.coverage_type,bank_mortgagee:d.bank_mortgagee}]:[]);
+  if(!pols.length)return '<p style="color:#9ca3af;font-size:11px">No insurance policies recorded.</p>';
+  var totalInsured=pols.reduce(function(s,p){return s+(parseFloat(p.sum_insured)||0);},0);
+  var outstanding2=parseFloat(d.outstanding)||0;
+  var rows=pols.map(function(p,i){
+    return '<tr><td>'+(i+1)+'</td><td>'+(p.godown_unit||'-')+'</td><td>'+(p.insurer||'-')+'</td><td>'+(p.policy_no||'-')+'</td><td>'+(p.policy_expiry||'-')+'</td><td>Rs.'+(parseFloat(p.sum_insured)||0).toLocaleString('en-IN')+'</td><td>'+(p.coverage_type||'-')+'</td><td>'+(p.bank_mortgagee||'-')+'</td></tr>';
+  }).join('');
+  var html='<table><thead><tr><th>#</th><th>Godown/Unit</th><th>Insurer</th><th>Policy No.</th><th>Expiry</th><th>Sum Insured</th><th>Coverage</th><th>Bank Mortgagee?</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  html+='<div class="field"><label>Total Sum Insured</label><span>Rs.'+totalInsured.toLocaleString('en-IN')+'</span></div>';
+  if(totalInsured>0&&outstanding2>0&&totalInsured<outstanding2)html+='<div class="alert-red">Insurance Inadequate: Total sum insured Rs.'+totalInsured.toLocaleString('en-IN')+' is less than outstanding Rs.'+outstanding2.toLocaleString('en-IN')+'</div>';
+  return html;
+})()}
 ${d.insurance_observations?'<div class="field"><label>Remarks</label><p>'+d.insurance_observations+'</p></div>':''}
 
 <h2>Section 5 — Observations & Compliance</h2>
@@ -579,6 +608,13 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
             <div className="fg"><label>Debtor Margin % (bank norm)</label><input type="number" value={data.debtor_margin_pct||40} onChange={e=>set('debtor_margin_pct',e.target.value)} disabled={readOnly} min={0} max={100}/></div>
             <div className="fg"><label>Total Creditors (Rs.) — deducted from DP</label><input type="number" value={data.total_creditors||''} onChange={e=>set('total_creditors',e.target.value)} disabled={readOnly} placeholder="0"/></div>
           </div>
+          <div className="fg3" style={{marginBottom:6}}>
+            <div className="fg"><label>Banking Arrangement</label><select value={data.banking_arrangement||'Single Bank'} onChange={e=>set('banking_arrangement',e.target.value)} disabled={readOnly}><option>Single Bank</option><option>Consortium</option><option>Multiple Banking</option></select></div>
+            {(data.banking_arrangement==='Consortium'||data.banking_arrangement==='Multiple Banking')&&<>
+              <div className="fg"><label>Total Consortium / MB Limit (Rs.) <span style={{color:'var(--blue)',fontSize:11}}>(all banks combined)</span></label><input type="number" value={data.total_consortium_limit||''} onChange={e=>set('total_consortium_limit',e.target.value)} disabled={readOnly} placeholder="0"/></div>
+              <div className="fg"><label>This Bank's Share <span style={{color:'var(--green)',fontSize:11}}>(auto)</span></label><input value={dpCalc.totalConsortiumLimit>0&&dpCalc.sanctioned>0?Math.round(dpCalc.bankShare*100)+'%':'—'} readOnly style={{background:'var(--gray-l)',cursor:'default',fontWeight:700}}/></div>
+            </>}
+          </div>
           <div className="fg3" style={{marginBottom:10}}>
             <div className="fg"><label>% Slow-Moving Stock <span style={{color:'var(--amber)',fontSize:11}}>(auto-excluded from DP)</span></label><input type="number" value={data.stock_slow_pct||''} onChange={e=>set('stock_slow_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
             <div className="fg"><label>% Dead / Non-Moving Stock <span style={{color:'var(--red)',fontSize:11}}>(auto-excluded from DP)</span></label><input type="number" value={data.stock_dead_pct||''} onChange={e=>set('stock_dead_pct',e.target.value)} disabled={readOnly} placeholder="0"/></div>
@@ -586,9 +622,9 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,fontSize:12}}>
             <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Stocks</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.goodStock.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Physical less slow-moving &amp; dead stock</div></div>
-            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Debtors</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.eligDebtors.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>&lt;90 days, excl. group debtors</div></div>
-            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Gross DP</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.grossDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Stock@{Math.round(dpCalc.sMargin*100)}% + Debtor@{Math.round(dpCalc.dMargin*100)}% margin, less creditors</div></div>
-            <div style={{background:dpCalc.finalDP<dpCalc.outstanding?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)',borderRadius:8,padding:'8px 10px',border:'1px solid '+(dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)')}}><div style={{color:'var(--gray)',marginBottom:2}}>Final DP (capped)</div><div style={{fontWeight:700,fontSize:14,color:dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)'}}>Rs.{dpCalc.finalDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Min of Gross DP & Sanctioned limit</div></div>
+            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Eligible Debtors</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.eligDebtors.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>&lt;{data.debtor_cover_days||90} days, excl. group debtors</div></div>
+            <div style={{background:'rgba(255,255,255,.6)',borderRadius:8,padding:'8px 10px'}}><div style={{color:'var(--gray)',marginBottom:2}}>Gross DP {dpCalc.isConsortium?'(Total Pool)':''}</div><div style={{fontWeight:700,fontSize:14}}>Rs.{dpCalc.grossDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>Stock@{Math.round(dpCalc.sMargin*100)}% + Debtor@{Math.round(dpCalc.dMargin*100)}% margin, less creditors</div></div>
+            <div style={{background:dpCalc.finalDP<dpCalc.outstanding?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)',borderRadius:8,padding:'8px 10px',border:'1px solid '+(dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)')}}><div style={{color:'var(--gray)',marginBottom:2}}>{dpCalc.isConsortium?'This Bank DP ('+Math.round(dpCalc.bankShare*100)+'% share)':'Final DP (capped)'}</div><div style={{fontWeight:700,fontSize:14,color:dpCalc.finalDP<dpCalc.outstanding?'var(--red)':'var(--green)'}}>Rs.{dpCalc.finalDP.toLocaleString('en-IN')}</div><div style={{fontSize:10,color:'var(--gray)'}}>{dpCalc.isConsortium?'Total pool DP × bank share':'Min of Gross DP & Sanctioned limit'}</div></div>
           </div>
           {dpCalc.finalDP<dpCalc.outstanding&&<div style={{marginTop:10,color:'var(--red)',fontWeight:600,fontSize:12.5}}>INADEQUATE DP — Outstanding Rs.{dpCalc.outstanding.toLocaleString('en-IN')} exceeds Audit DP Rs.{dpCalc.finalDP.toLocaleString('en-IN')} by Rs.{(dpCalc.outstanding-dpCalc.finalDP).toLocaleString('en-IN')}</div>}
           {!readOnly&&dpCalc.grossDP>0&&<button type="button" style={{marginTop:10,fontSize:12,background:'var(--blue)',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',cursor:'pointer',fontWeight:600}} onClick={()=>set('dp_audit',String(dpCalc.finalDP))}>Apply Rs.{dpCalc.finalDP.toLocaleString('en-IN')} to DP as per Audit</button>}
@@ -625,9 +661,38 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
       </div></div>
 
       <div className="rpt-section"><div className="rpt-sh">Section 4 — Insurance</div><div className="rpt-body">
-        <div className="fg3"><div className="fg"><label>Insurer</label><input value={data.insurer||''} onChange={e=>set('insurer',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Policy No.</label><input value={data.policy_no||''} onChange={e=>set('policy_no',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Expiry Date</label><input type="date" value={data.policy_expiry||''} onChange={e=>set('policy_expiry',e.target.value)} disabled={readOnly}/></div></div>
-        <div className="fg3"><div className="fg"><label>Sum Insured (Rs.)</label><input value={data.sum_insured||''} onChange={e=>set('sum_insured',e.target.value)} disabled={readOnly}/></div><div className="fg"><label>Coverage</label><select value={data.coverage_type||''} onChange={e=>set('coverage_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Fire','Burglary','Flood','All Risk','Marine'].map(o=><option key={o}>{o}</option>)}</select></div><div className="fg"><label>Bank Shown as Mortgagee?</label><select value={data.bank_mortgagee||''} onChange={e=>set('bank_mortgagee',e.target.value)} disabled={readOnly}><option value="">Select</option><option>Yes</option><option>No</option></select></div></div>
-        {data.sum_insured&&data.outstanding&&parseFloat(data.sum_insured)<parseFloat(data.outstanding)&&<div style={{color:'var(--red)',fontWeight:600,fontSize:12.5,marginBottom:8}}>Insurance Inadequate: Sum insured Rs.{(parseFloat(data.sum_insured)||0).toLocaleString('en-IN')} is less than outstanding Rs.{(parseFloat(data.outstanding)||0).toLocaleString('en-IN')}</div>}
+        {(data.insurance_policies&&data.insurance_policies.length?data.insurance_policies:[{}]).map((pol,i)=>{
+          const policies=data.insurance_policies&&data.insurance_policies.length?data.insurance_policies:[{}];
+          return(<div key={i} style={{border:'1px solid var(--border)',borderRadius:8,padding:'12px',marginBottom:10,background:'#fafafa'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <div style={{fontWeight:700,fontSize:12.5,color:'var(--blue)'}}>Policy {i+1}{pol.godown_unit?' — '+pol.godown_unit:''}</div>
+              {!readOnly&&policies.length>1&&<button type="button" onClick={()=>removeInsurance(i)} style={{background:'var(--red)',color:'#fff',border:'none',borderRadius:5,padding:'2px 10px',fontSize:11,cursor:'pointer'}}>Remove</button>}
+            </div>
+            <div className="fg3" style={{marginBottom:6}}>
+              <div className="fg"><label>Godown / Unit Name</label><input value={pol.godown_unit||''} onChange={e=>setInsurance(i,'godown_unit',e.target.value)} disabled={readOnly} placeholder="e.g. Main Godown, Unit 2"/></div>
+              <div className="fg"><label>Insurer</label><input value={pol.insurer||''} onChange={e=>setInsurance(i,'insurer',e.target.value)} disabled={readOnly}/></div>
+              <div className="fg"><label>Policy No.</label><input value={pol.policy_no||''} onChange={e=>setInsurance(i,'policy_no',e.target.value)} disabled={readOnly}/></div>
+            </div>
+            <div className="fg3">
+              <div className="fg"><label>Expiry Date</label><input type="date" value={pol.policy_expiry||''} onChange={e=>setInsurance(i,'policy_expiry',e.target.value)} disabled={readOnly}/></div>
+              <div className="fg"><label>Sum Insured (Rs.)</label><input type="number" value={pol.sum_insured||''} onChange={e=>setInsurance(i,'sum_insured',e.target.value)} disabled={readOnly}/></div>
+              <div className="fg"><label>Coverage</label><select value={pol.coverage_type||''} onChange={e=>setInsurance(i,'coverage_type',e.target.value)} disabled={readOnly}><option value="">Select</option>{['Fire','Burglary','Flood','All Risk','Marine','Comprehensive'].map(o=><option key={o}>{o}</option>)}</select></div>
+            </div>
+            <div className="fg" style={{marginTop:6}}><label>Bank Shown as Mortgagee?</label><select value={pol.bank_mortgagee||''} onChange={e=>setInsurance(i,'bank_mortgagee',e.target.value)} disabled={readOnly} style={{maxWidth:160}}><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+          </div>);
+        })}
+        {!readOnly&&<button type="button" onClick={addInsurance} style={{marginBottom:12,background:'var(--blue)',color:'#fff',border:'none',borderRadius:6,padding:'6px 16px',fontSize:12,cursor:'pointer',fontWeight:600}}>+ Add Godown / Policy</button>}
+        {(()=>{
+          const pols=data.insurance_policies&&data.insurance_policies.length?data.insurance_policies:[{}];
+          const totalInsured=pols.reduce(function(s,p){return s+(parseFloat(p.sum_insured)||0);},0);
+          const outstanding=parseFloat(data.outstanding)||0;
+          const anyNoMortgagee=pols.some(function(p){return p.bank_mortgagee==='No';});
+          return(<>
+            {totalInsured>0&&<div style={{fontWeight:700,fontSize:13,marginBottom:6}}>Total Sum Insured: Rs.{totalInsured.toLocaleString('en-IN')}</div>}
+            {totalInsured>0&&outstanding>0&&totalInsured<outstanding&&<div style={{color:'var(--red)',fontWeight:600,fontSize:12.5,marginBottom:6}}>Insurance Inadequate: Total sum insured Rs.{totalInsured.toLocaleString('en-IN')} is less than outstanding Rs.{outstanding.toLocaleString('en-IN')}</div>}
+            {anyNoMortgagee&&<div style={{color:'var(--amber)',fontWeight:600,fontSize:12.5,marginBottom:6}}>Warning: Bank not shown as mortgagee in one or more policies</div>}
+          </>);
+        })()}
         <div className="fg"><label>Adequacy Remarks</label><textarea value={data.insurance_observations||''} onChange={e=>set('insurance_observations',e.target.value)} disabled={readOnly}/></div>
       </div></div>
 
