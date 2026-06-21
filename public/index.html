@@ -1120,7 +1120,7 @@ function AuthScreen({onLogin}){
   async function submit(e){
     e.preventDefault();setErr('');setLoading(true);
     const url=mode==='login'?'/api/auth/login':'/api/auth/register';
-    const body=mode==='login'?{email:form.email,password:form.password,org}:{...form,role:isHDFC?'banker':role,org,hdfc_role:isHDFC?hdfcRole:undefined};
+    const body=mode==='login'?{email:form.email,password:form.password,org,hdfc_role:isHDFC?hdfcRole:undefined}:{...form,role:isHDFC?'banker':role,org,hdfc_role:isHDFC?hdfcRole:undefined};
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
     setLoading(false);if(r.error){setErr(r.error);return;}
     localStorage.setItem('af_token',r.token);onLogin(r.user);
@@ -1139,7 +1139,10 @@ function AuthScreen({onLogin}){
     </div>
     {mode==='register'&&urlRef&&<div style={{background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:13,color:'#1e429f'}}>🎁 You were referred! Register below to activate your <strong>12 months free</strong> Founding Member access.</div>}
     {!isHDFC&&<div className="role-tabs">{[['ca','CA'],['banker','Banker'],['borrower','Borrower']].map(([r,l])=><div key={r} className={`role-tab ${role===r?'active':''}`} onClick={()=>{setRole(r);setErr('');}}>{l}</div>)}</div>}
-    {isHDFC&&mode==='login'&&<div style={{background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12.5,color:'#1e3a8a'}}>Use your HDFC email ID and the temporary password sent to you.</div>}
+    {isHDFC&&mode==='login'&&<div style={{marginBottom:12}}>
+      <div className="fg" style={{marginBottom:8}}><label>Your HDFC Role</label><select value={hdfcRole} onChange={e=>setHdfcRole(e.target.value)} style={{fontWeight:600}}><option value="cm">Credit Manager (CM)</option><option value="supervisor">Supervisor</option><option value="rm">Relationship Manager (RM)</option><option value="ca">Chartered Accountant (CA)</option><option value="borrower">Borrower</option></select></div>
+      <div style={{background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#1e3a8a'}}>First time? Select your role above — it will be saved to your account.</div>
+    </div>}
     {err&&<div className="alert alert-r" style={{marginBottom:12}}>{err}</div>}
     <form onSubmit={submit}>
       {mode==='register'&&<div className="fg"><label>Full Name</label><input value={form.name} onChange={e=>set('name',e.target.value)} required/></div>}

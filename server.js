@@ -242,13 +242,20 @@ app.post('/api/auth/register', async function(req, res) {
 });
 
 app.post('/api/auth/login', async function(req, res) {
-  const { email, password } = req.body;
+  const { email, password, org, hdfc_role } = req.body;
   const user = dbFindOne('users', { email });
   if (!user || !await bcrypt.compare(password, user.password))
     return res.status(400).json({ error: 'Invalid credentials' });
-  linkPendingAudits(user.id, email, user.role);
-  const token = jwt.sign({ id:user.id, name:user.name, email:user.email, role:user.role, org_code:user.org_code||null, hdfc_role:user.hdfc_role||null }, JWT_SECRET, { expiresIn:'7d' });
-  res.json({ token, user:safeUser(user) });
+  // If user selects an org at login and account doesn't have org_code yet, set it
+  if (org && !user.org_code) {
+    const updates = { org_code: org };
+    if (org === 'hdfc' && !user.hdfc_role) updates.hdfc_role = hdfc_role || 'cm';
+    dbUpdate('users', { id: user.id }, updates);
+  }
+  const updatedUser = dbFindOne('users', { id: user.id });
+  linkPendingAudits(updatedUser.id, email, updatedUser.role);
+  const token = jwt.sign({ id:updatedUser.id, name:updatedUser.name, email:updatedUser.email, role:updatedUser.role, org_code:updatedUser.org_code||null, hdfc_role:updatedUser.hdfc_role||null }, JWT_SECRET, { expiresIn:'7d' });
+  res.json({ token, user:safeUser(updatedUser) });
 });
 
 app.get('/api/auth/me', auth(), function(req, res) {
