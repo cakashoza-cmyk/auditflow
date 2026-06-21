@@ -246,10 +246,10 @@ app.post('/api/auth/login', async function(req, res) {
   const user = dbFindOne('users', { email });
   if (!user || !await bcrypt.compare(password, user.password))
     return res.status(400).json({ error: 'Invalid credentials' });
-  // If user selects an org at login and account doesn't have org_code yet, set it
-  if (org && !user.org_code) {
-    const updates = { org_code: org };
-    if (org === 'hdfc' && !user.hdfc_role) updates.hdfc_role = hdfc_role || 'cm';
+  // Patch org_code ONLY for HDFC emails (not standard/demo accounts)
+  const isHdfcEmail = email && (email.includes('hdfcbank') || email.includes('hdfc.bank') || email.includes('@hdfc.'));
+  if (org === 'hdfc' && !user.org_code && isHdfcEmail) {
+    const updates = { org_code: 'hdfc', hdfc_role: hdfc_role || 'cm' };
     dbUpdate('users', { id: user.id }, updates);
   }
   const updatedUser = dbFindOne('users', { id: user.id });
@@ -1058,6 +1058,11 @@ async function seedDemo() {
       console.log('Seeded demo:', d.email);
     }
   }
+  // Always ensure standard demo accounts are NOT tagged as HDFC
+  ['banker@demo.com','ca@demo.com','borrower@demo.com'].forEach(function(email) {
+    const u = dbFindOne('users', { email });
+    if (u && u.org_code) dbUpdate('users', { email }, { org_code: null, hdfc_role: null });
+  });
   // Also patch any existing HDFC demo accounts that lack org_code
   ['cm@hdfc.demo','ca@hdfc.demo','rm@hdfc.demo'].forEach(function(email) {
     const u = dbFindOne('users', { email });
