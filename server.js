@@ -608,8 +608,8 @@ stocks[0]=Raw Materials,[1]=WIP,[2]=Finished Goods,[3]=Stores & Spares,[4]=Stock
     prompt: (a) => `You are an expert Indian CA analyzing a DEBTORS / BOOK DEBTS STATEMENT for bank working capital audit.
 Borrower: ${a.borrower_name}, Bank: ${a.bank_name}
 Extract and return ONLY this JSON (null for missing):
-{"total_debtors":null,"dp_debtors":null,"debtors":[{"amount":null,"pct":null,"remarks":null},{"amount":null,"pct":null,"remarks":null},{"amount":null,"pct":null,"remarks":null},{"amount":null,"pct":null,"remarks":null},{"amount":null,"pct":null,"remarks":null}],"disputed_debtors":null,"related_debtors":null,"debtor_observations":null,"ai_summary":null}
-debtors[0]=<30 days,[1]=30-60 days,[2]=60-90 days,[3]=90-180 days,[4]=>180 days. All INR numbers.`
+{"total_debtors":null,"debtors":[{"amount":null,"pct":null,"group_amt":null,"include_group":"Yes","remarks":null},{"amount":null,"pct":null,"group_amt":null,"include_group":"Yes","remarks":null},{"amount":null,"pct":null,"group_amt":null,"include_group":"Yes","remarks":null},{"amount":null,"pct":null,"group_amt":null,"include_group":"Yes","remarks":null},{"amount":null,"pct":null,"group_amt":null,"include_group":"Yes","remarks":null},{"amount":null,"pct":null,"group_amt":null,"include_group":"Yes","remarks":null}],"disputed_debtors":null,"debtor_observations":null,"ai_summary":null}
+debtors[0]=<30 days,[1]=30-60 days,[2]=60-90 days,[3]=90-120 days,[4]=120-180 days,[5]=>180 days. group_amt = amount belonging to group/related companies. include_group = Yes (include in DP) or No (exclude). All INR numbers, no symbols.`
   },
   creditors_statement: {
     label: 'Creditors Statement',
@@ -641,11 +641,11 @@ In ops_obs: mention total taxable turnover declared, monthly average sales, whet
   insurance: {
     label: 'Insurance Policy / Certificate',
     desc: 'Insurance certificate covering stock/assets. Must be valid, adequate, and show bank as mortgagee/loss payee.',
-    prompt: (a) => `You are an expert Indian CA analyzing an INSURANCE POLICY/CERTIFICATE for working capital audit.
+    prompt: (a) => `You are an expert Indian CA analyzing INSURANCE POLICY/CERTIFICATE documents for working capital audit.
 Borrower: ${a.borrower_name}, Bank: ${a.bank_name}
 Extract and return ONLY this JSON (null for missing):
-{"insurer":null,"policy_no":null,"policy_expiry":"YYYY-MM-DD","sum_insured":null,"coverage_type":null,"bank_mortgagee":null,"insurance_observations":null,"ai_summary":null}
-coverage_type must be one of: Fire, Burglary, Flood, All Risk, Marine. bank_mortgagee: Yes or No.`
+{"insurance_policies":[{"godown_unit":null,"insurer":null,"policy_no":null,"policy_expiry":"YYYY-MM-DD","sum_insured":null,"coverage_type":null,"bank_mortgagee":null}],"insurance_observations":null,"ai_summary":null}
+Create one entry per policy/godown found. coverage_type must be one of: Fire, Burglary, Flood, All Risk, Marine, Comprehensive. bank_mortgagee: Yes or No. sum_insured as plain number (INR). If only one policy found, still return array with one element.`
   },
   financials: {
     label: 'ITR / Audited Balance Sheet',
@@ -659,8 +659,9 @@ In ops_obs: mention annual sales turnover, net profit/loss, inventory turnover r
 };
 
 app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('file'), async function(req, res) {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: 'AI not configured - add GROQ_API_KEY in Railway (free key at console.groq.com)' });
+  const apiKey = process.env.KIMI_API_KEY || process.env.GROQ_API_KEY;
+  const useKimi = !!process.env.KIMI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI not configured — add KIMI_API_KEY in Railway Variables (get key at platform.moonshot.ai)' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const docType = req.body.doc_type;
   const cfg = AI_DOC_PROMPTS[docType];
@@ -706,9 +707,19 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
     const runs = s.match(/[\x20-\x7e]{4,}/g) || [];
     return runs.join(' ').slice(0, 12000);
   }
-  async function buildGroqPayload() {
+  function buildPayload() {
     if (isImage) {
       const base64Data = req.file.buffer.toString('base64');
+      if (useKimi) {
+        return JSON.stringify({
+          model: 'moonshot-v1-8k',
+          messages: [{ role: 'user', content: [
+            { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } },
+            { type: 'text', text: promptText }
+          ]}],
+          temperature: 0.1, max_tokens: 2048
+        });
+      }
       return JSON.stringify({
         model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         messages: [{ role: 'user', content: [
@@ -721,26 +732,32 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
     let textContent = '';
     if (isPdf) { textContent = extractPdfText(req.file.buffer); }
     else if (isExcel) { textContent = extractExcelText(req.file.buffer); }
-    else { textContent = req.file.buffer.toString('utf8', 0, 12000); }
+    else { textContent = req.file.buffer.toString('utf8', 0, 15000); }
+    const model = useKimi ? 'moonshot-v1-32k' : 'llama-3.3-70b-versatile';
+    const hostname = useKimi ? 'api.moonshot.cn' : 'api.groq.com';
     return JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: promptText + '\n\nDOCUMENT CONTENT:\n' + textContent }],
+      model,
+      messages: [
+        { role: 'system', content: 'You are an expert Indian Chartered Accountant with 20+ years of stock audit experience. You extract financial data precisely and return only valid JSON.' },
+        { role: 'user', content: promptText + '\n\nDOCUMENT CONTENT:\n' + textContent }
+      ],
       temperature: 0.1, max_tokens: 2048
     });
   }
-  let groqPayload;
-  try { groqPayload = await buildGroqPayload(); } catch(e) { return res.status(500).json({ error: 'File processing error: ' + e.message }); }
-  const https = require('https');
-  const groqReq = https.request({
-    hostname: 'api.groq.com', path: '/openai/v1/chat/completions', method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey, 'Content-Length': Buffer.byteLength(groqPayload) }
-  }, function(groqRes) {
+  let payload;
+  try { payload = buildPayload(); } catch(e) { return res.status(500).json({ error: 'File processing error: ' + e.message }); }
+  const aiHostname = (useKimi || isImage) ? (useKimi ? 'api.moonshot.cn' : 'api.groq.com') : 'api.groq.com';
+  const aiPath = useKimi ? '/v1/chat/completions' : '/openai/v1/chat/completions';
+  const aiReq = https.request({
+    hostname: aiHostname, path: aiPath, method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey, 'Content-Length': Buffer.byteLength(payload) }
+  }, function(aiRes) {
     let rdata = '';
-    groqRes.on('data', chunk => rdata += chunk);
-    groqRes.on('end', () => {
+    aiRes.on('data', chunk => rdata += chunk);
+    aiRes.on('end', () => {
       try {
         const parsed = JSON.parse(rdata);
-        if (parsed.error) return res.status(500).json({ error: 'AI error: ' + parsed.error.message });
+        if (parsed.error) return res.status(500).json({ error: 'AI error: ' + (parsed.error.message || JSON.stringify(parsed.error)) });
         const content = (parsed.choices && parsed.choices[0] && parsed.choices[0].message && parsed.choices[0].message.content) || '';
         const m = content.match(/\{[\s\S]*\}/);
         if (m) {
@@ -750,10 +767,10 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
             const aidx = _aiDb.audits.findIndex(a => a.id === req.params.id);
             if (aidx !== -1) {
               if (!_aiDb.audits[aidx].ai_results) _aiDb.audits[aidx].ai_results = {};
-              _aiDb.audits[aidx].ai_results[docType] = { result: extracted, analyzed_at: new Date().toISOString() };
+              _aiDb.audits[aidx].ai_results[docType] = { result: extracted, analyzed_at: new Date().toISOString(), model: useKimi ? 'kimi' : 'groq' };
               saveDB(_aiDb);
             }
-            res.json({ ok: true, doc_type: docType, label: cfg.label, result: extracted });
+            res.json({ ok: true, doc_type: docType, label: cfg.label, result: extracted, model: useKimi ? 'kimi-k2' : 'groq' });
           } catch(pe) { res.json({ ok: true, doc_type: docType, label: cfg.label, result: null, raw: content }); }
         } else {
           res.json({ ok: true, doc_type: docType, label: cfg.label, result: null, raw: content });
@@ -761,9 +778,9 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
       } catch(e) { res.status(500).json({ error: 'Failed to parse AI response', details: e.message }); }
     });
   });
-  groqReq.on('error', err => res.status(500).json({ error: 'AI request failed', details: err.message }));
-  groqReq.write(groqPayload);
-  groqReq.end();
+  aiReq.on('error', err => res.status(500).json({ error: 'AI request failed', details: err.message }));
+  aiReq.write(payload);
+  aiReq.end();
 });
 
 
