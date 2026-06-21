@@ -1045,15 +1045,43 @@ async function seedDemo() {
   const demos = [
     { name: 'Demo Banker', email: 'banker@demo.com', role: 'banker', password: 'demo1234' },
     { name: 'Demo CA', email: 'ca@demo.com', role: 'ca', password: 'demo1234' },
-    { name: 'Demo Borrower', email: 'borrower@demo.com', role: 'borrower', password: 'demo1234' }
+    { name: 'Demo Borrower', email: 'borrower@demo.com', role: 'borrower', password: 'demo1234' },
+    { name: 'Demo CM (HDFC)', email: 'cm@hdfc.demo', role: 'banker', password: 'demo1234', org_code: 'hdfc', hdfc_role: 'cm' },
+    { name: 'Demo CA (HDFC)', email: 'ca@hdfc.demo', role: 'ca', password: 'demo1234', org_code: 'hdfc', hdfc_role: 'ca' },
+    { name: 'Demo RM (HDFC)', email: 'rm@hdfc.demo', role: 'banker', password: 'demo1234', org_code: 'hdfc', hdfc_role: 'rm' }
   ];
   for (const d of demos) {
     if (!dbFindOne('users', { email: d.email })) {
       const hash = await bcrypt.hash(d.password, 10);
-      dbInsert('users', { name: d.name, email: d.email, password: hash, role: d.role,
-        created_at: new Date().toISOString() });
+      const { password: _pw, ...rest } = d;
+      dbInsert('users', { ...rest, password: hash, created_at: new Date().toISOString() });
       console.log('Seeded demo:', d.email);
     }
+  }
+  // Also patch any existing HDFC demo accounts that lack org_code
+  ['cm@hdfc.demo','ca@hdfc.demo','rm@hdfc.demo'].forEach(function(email) {
+    const u = dbFindOne('users', { email });
+    if (u && !u.org_code) {
+      const roleMap = { 'cm@hdfc.demo': 'cm', 'ca@hdfc.demo': 'ca', 'rm@hdfc.demo': 'rm' };
+      dbUpdate('users', { email }, { org_code: 'hdfc', hdfc_role: roleMap[email] });
+    }
+  });
+  // Seed demo HDFC accounts if none exist
+  const cmUser = dbFindOne('users', { email: 'cm@hdfc.demo' });
+  if (cmUser && dbFind('hdfc_accounts', { cm_email: 'cm@hdfc.demo' }).length === 0) {
+    const today = new Date();
+    function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r.toISOString().split('T')[0]; }
+    const demoAccounts = [
+      { customer_name: 'Sharma Textiles Pvt Ltd', ca_email: 'ca@hdfc.demo', rm_email: 'rm@hdfc.demo', due_date: addDays(today, 8), segment: 'SME', status: 'rm_confirmed', customer_email: 'borrower@demo.com', borrower_contact_entered: true },
+      { customer_name: 'Gujarat Spices Ltd', ca_email: 'ca@hdfc.demo', rm_email: 'rm@hdfc.demo', due_date: addDays(today, 22), segment: 'Mid Market', status: 'doc_requested', customer_email: 'borrower@demo.com', doc_request_sent: true },
+      { customer_name: 'Mumbai Steel Works', ca_email: 'ca@hdfc.demo', rm_email: 'rm@hdfc.demo', due_date: addDays(today, -3), segment: 'Large Corp', status: 'submitted', customer_email: '' },
+      { customer_name: 'Rajasthan Agro Exports', ca_email: 'ca@hdfc.demo', rm_email: '', due_date: addDays(today, 35), segment: 'SME', status: 'pending', customer_email: '' },
+      { customer_name: 'Pune Auto Components', ca_email: 'ca@hdfc.demo', rm_email: 'rm@hdfc.demo', due_date: addDays(today, 12), segment: 'SME', status: 'ca_working', customer_email: 'borrower@demo.com', borrower_contact_entered: true, doc_request_sent: true },
+    ];
+    demoAccounts.forEach(function(acc) {
+      dbInsert('hdfc_accounts', { ...acc, org_code: 'hdfc', cm_id: cmUser.id, cm_email: 'cm@hdfc.demo', supervisor_email: '', borrower_contact_entered: acc.borrower_contact_entered || false, doc_request_sent: acc.doc_request_sent || false });
+    });
+    console.log('Seeded HDFC demo accounts');
   }
 }
 
