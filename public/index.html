@@ -536,7 +536,7 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
   async function pdfToJpeg(file){await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;const page=await pdf.getPage(1);const vp=page.getViewport({scale:2.0});const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;return new Promise(function(resolve){canvas.toBlob(resolve,'image/jpeg',0.92);});}
   async function runAI(file,docKey){setAiLoading(docKey);setAiMsgs(p=>({...p,[docKey]:'Uploading...'}));let uploadFile=file;const isPdfFile=file.type==='application/pdf'||/\.pdf$/i.test(file.name);if(isPdfFile){try{setAiMsgs(p=>({...p,[docKey]:'Reading PDF...'}));const blob=await pdfToJpeg(file);uploadFile=new File([blob],file.name.replace(/\.pdf$/i,'.jpg'),{type:'image/jpeg'});}catch(e){}}
     const fd=new FormData();fd.append('file',uploadFile);fd.append('doc_type',docKey);
-    setAiMsgs(p=>({...p,[docKey]:'Sending to Kimi AI...'}));
+    setAiMsgs(p=>({...p,[docKey]:'Analysing document...'}));
     const r=await fetch('/api/audits/'+audit.id+'/ai-analyze',{method:'POST',headers:{Authorization:'Bearer '+API.token()},body:fd}).then(x=>x.json());
     setAiLoading(null);
     if(r.error){setAiMsgs(p=>({...p,[docKey]:'Error: '+r.error}));return;}

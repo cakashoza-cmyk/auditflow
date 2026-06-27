@@ -720,28 +720,32 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
     return runs.join(' ').slice(0, 12000);
   }
   function buildPayload() {
+    let textContent = '';
     if (isImage) {
-      const base64Data = req.file.buffer.toString('base64');
-      if (useKimi) {
+      // DeepSeek and Groq text models don't support image_url — use Groq vision model if available, else reject
+      if (useDeepSeek || (!useKimi)) {
+        // Groq vision model supports images
+        const base64Data = req.file.buffer.toString('base64');
         return JSON.stringify({
-          model: 'kimi-k2.6',
+          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
           messages: [{ role: 'user', content: [
-            { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } },
-            { type: 'text', text: promptText }
+            { type: 'text', text: promptText },
+            { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } }
           ]}],
           temperature: 0.1, max_tokens: 2048
         });
       }
+      // Kimi vision
+      const base64Data = req.file.buffer.toString('base64');
       return JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'kimi-k2.6',
         messages: [{ role: 'user', content: [
-          { type: 'text', text: promptText },
-          { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } }
+          { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + base64Data } },
+          { type: 'text', text: promptText }
         ]}],
         temperature: 0.1, max_tokens: 2048
       });
     }
-    let textContent = '';
     if (isPdf) { textContent = extractPdfText(req.file.buffer); }
     else if (isExcel) { textContent = extractExcelText(req.file.buffer); }
     else { textContent = req.file.buffer.toString('utf8', 0, 15000); }
@@ -757,11 +761,14 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
   }
   let payload;
   try { payload = buildPayload(); } catch(e) { return res.status(500).json({ error: 'File processing error: ' + e.message }); }
-  const aiHostname = useDeepSeek ? 'api.deepseek.com' : (useKimi ? 'api.moonshot.ai' : 'api.groq.com');
-  const aiPath = useDeepSeek ? '/v1/chat/completions' : (useKimi ? '/v1/chat/completions' : '/openai/v1/chat/completions');
+  // Images: always route through Groq vision (DeepSeek-chat has no vision support)
+  const useGroqForImage = isImage && (useDeepSeek || !useKimi);
+  const aiHostname = useGroqForImage ? 'api.groq.com' : (useDeepSeek ? 'api.deepseek.com' : (useKimi ? 'api.moonshot.ai' : 'api.groq.com'));
+  const aiPath = useGroqForImage ? '/openai/v1/chat/completions' : (useDeepSeek ? '/v1/chat/completions' : (useKimi ? '/v1/chat/completions' : '/openai/v1/chat/completions'));
+  const activeKey = useGroqForImage ? (process.env.GROQ_API_KEY || apiKey) : apiKey;
   const aiReq = https.request({
     hostname: aiHostname, path: aiPath, method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey, 'Content-Length': Buffer.byteLength(payload) }
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + activeKey, 'Content-Length': Buffer.byteLength(payload) }
   }, function(aiRes) {
     let rdata = '';
     aiRes.on('data', chunk => rdata += chunk);
