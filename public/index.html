@@ -601,7 +601,7 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
 
       {!readOnly&&<div style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)',borderRadius:12,marginBottom:20,overflow:'hidden'}}>
         <div style={{padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>setShowAI(p=>!p)}>
-          <div><div style={{color:'#fff',fontWeight:800,fontSize:14}}>🤖 Kimi K2 — AI Document Analysis</div><div style={{color:'#94a3b8',fontSize:12,marginTop:2}}>Upload stock statement, debtor list, insurance, bank statement — AI reads and pre-fills all report fields</div></div>
+          <div><div style={{color:'#fff',fontWeight:800,fontSize:14}}>🤖 AI Analysis &amp; Auto-Population of Report</div><div style={{color:'#94a3b8',fontSize:12,marginTop:2}}>Upload documents — AI extracts data and automatically updates all report fields</div></div>
           <span style={{color:'#60a5fa',fontSize:20}}>{showAI?'▲':'▼'}</span>
         </div>
         {showAI&&<div style={{padding:'0 20px 16px'}}>
@@ -616,7 +616,7 @@ ${d.recommendations?'<div class="field"><label>Recommendations to Bank</label><p
               </label>
             </div>
           </div>))}
-          <div style={{fontSize:11,color:'#64748b',marginTop:4}}>PDF, JPG, PNG, Excel supported · Max 20MB · Powered by Kimi K2 (Moonshot AI) · Always review AI-filled fields before finalizing</div>
+          <div style={{fontSize:11,color:'#64748b',marginTop:4}}>PDF, JPG, PNG, Excel supported · Max 20MB · Always review AI-filled fields before finalizing</div>
         </div>}
       </div>}
 
