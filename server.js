@@ -670,9 +670,10 @@ In ops_obs: mention annual sales turnover, net profit/loss, inventory turnover r
 };
 
 app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('file'), async function(req, res) {
-  const apiKey = process.env.KIMI_API_KEY || process.env.GROQ_API_KEY;
-  const useKimi = !!process.env.KIMI_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: 'AI not configured — add KIMI_API_KEY in Railway Variables (get key at platform.moonshot.ai)' });
+  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.KIMI_API_KEY || process.env.GROQ_API_KEY;
+  const useDeepSeek = !!process.env.DEEPSEEK_API_KEY;
+  const useKimi = !useDeepSeek && !!process.env.KIMI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI not configured — add DEEPSEEK_API_KEY or GROQ_API_KEY in Railway Variables' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const docType = req.body.doc_type;
   const cfg = AI_DOC_PROMPTS[docType];
@@ -744,7 +745,7 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
     if (isPdf) { textContent = extractPdfText(req.file.buffer); }
     else if (isExcel) { textContent = extractExcelText(req.file.buffer); }
     else { textContent = req.file.buffer.toString('utf8', 0, 15000); }
-    const model = useKimi ? 'kimi-k2.6' : 'llama-3.3-70b-versatile';
+    const model = useDeepSeek ? 'deepseek-chat' : (useKimi ? 'kimi-k2.6' : 'llama-3.3-70b-versatile');
     return JSON.stringify({
       model,
       messages: [
@@ -756,8 +757,8 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
   }
   let payload;
   try { payload = buildPayload(); } catch(e) { return res.status(500).json({ error: 'File processing error: ' + e.message }); }
-  const aiHostname = useKimi ? 'api.moonshot.ai' : 'api.groq.com';
-  const aiPath = useKimi ? '/v1/chat/completions' : '/openai/v1/chat/completions';
+  const aiHostname = useDeepSeek ? 'api.deepseek.com' : (useKimi ? 'api.moonshot.ai' : 'api.groq.com');
+  const aiPath = useDeepSeek ? '/v1/chat/completions' : (useKimi ? '/v1/chat/completions' : '/openai/v1/chat/completions');
   const aiReq = https.request({
     hostname: aiHostname, path: aiPath, method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey, 'Content-Length': Buffer.byteLength(payload) }
@@ -777,7 +778,7 @@ app.post('/api/audits/:id/ai-analyze', auth(['ca','admin']), uploadAI.single('fi
             const aidx = _aiDb.audits.findIndex(a => a.id === req.params.id);
             if (aidx !== -1) {
               if (!_aiDb.audits[aidx].ai_results) _aiDb.audits[aidx].ai_results = {};
-              _aiDb.audits[aidx].ai_results[docType] = { result: extracted, analyzed_at: new Date().toISOString(), model: useKimi ? 'kimi' : 'groq' };
+              _aiDb.audits[aidx].ai_results[docType] = { result: extracted, analyzed_at: new Date().toISOString(), model: useDeepSeek ? 'deepseek' : (useKimi ? 'kimi' : 'groq') };
               saveDB(_aiDb);
             }
             res.json({ ok: true, doc_type: docType, label: cfg.label, result: extracted, model: useKimi ? 'kimi-k2' : 'groq' });
